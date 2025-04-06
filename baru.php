@@ -1,5 +1,4 @@
 <?php
-// === Proses form ===
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $postTitle = $_POST['postTitle'] ?? '';
     $postContent = $_POST['postContent'] ?? '';
@@ -56,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// === Fungsi utama ===
 function createPostForDomain($domain, $username, $password, $title, $content, $categories, $tags, $uploadedFile = null) {
     $content = str_replace('@Domain', $domain, $content);
     $content = str_replace('@Judul', $title, $content);
@@ -76,7 +74,6 @@ function createPostForDomain($domain, $username, $password, $title, $content, $c
         if ($id) $tagIds[] = $id;
     }
 
-    // Upload thumbnail if file is uploaded
     $featuredMediaId = null;
     if ($uploadedFile && $uploadedFile['error'] === UPLOAD_ERR_OK) {
         $mediaUploadUrl = "https://$domain/wp-json/wp/v2/media";
@@ -130,7 +127,6 @@ function createPostForDomain($domain, $username, $password, $title, $content, $c
     return $code === 201 ? true : "Gagal (HTTP $code)";
 }
 
-// === Kategori ===
 function getCategoryIdOrCreate($domain, $auth, $name) {
     $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
     $response = wpGet($url, $auth);
@@ -141,7 +137,6 @@ function getCategoryIdOrCreate($domain, $auth, $name) {
     return $created['id'] ?? null;
 }
 
-// === Tag ===
 function getTagIdOrCreate($domain, $auth, $name) {
     $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
     $response = wpGet($url, $auth);
@@ -152,7 +147,6 @@ function getTagIdOrCreate($domain, $auth, $name) {
     return $created['id'] ?? null;
 }
 
-// === Helper curl ===
 function wpGet($url, $auth) {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
@@ -182,7 +176,8 @@ function wpPost($url, $auth, $data) {
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Auto Post WP</title>
+    <title>WP POSTER</title>
+    <link rel="icon" href="https://s.w.org/favicon.ico" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
