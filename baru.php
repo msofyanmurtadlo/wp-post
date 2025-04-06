@@ -5,7 +5,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $domainInput = $_POST['domain'] ?? '';
     $categories = $_POST['categories'] ?? '';
     $tags = $_POST['tags'] ?? '';
-    $uploadedFile = $_FILES['thumbnail'] ?? null;
 
     if (empty($postTitle) || empty($postContent)) {
         $responseMessage = 'Judul dan konten harus diisi.';
@@ -37,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 list($domain, $username, $password) = $parts;
 
-                $result = createPostForDomain($domain, $username, $password, $postTitle, $postContent, $categories, $tags, $uploadedFile);
+                $result = createPostForDomain($domain, $username, $password, $postTitle, $postContent, $categories, $tags);
                 if ($result === true) {
                     $successDomains[] = $domain;
                 } else {
@@ -55,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-function createPostForDomain($domain, $username, $password, $title, $content, $categories, $tags, $uploadedFile = null) {
+function createPostForDomain($domain, $username, $password, $title, $content, $categories, $tags) {
     $content = str_replace('@Domain', $domain, $content);
     $content = str_replace('@Judul', $title, $content);
 
@@ -74,33 +73,6 @@ function createPostForDomain($domain, $username, $password, $title, $content, $c
         if ($id) $tagIds[] = $id;
     }
 
-    $featuredMediaId = null;
-    if ($uploadedFile && $uploadedFile['error'] === UPLOAD_ERR_OK) {
-        $mediaUploadUrl = "https://$domain/wp-json/wp/v2/media";
-        $filePath = $uploadedFile['tmp_name'];
-        $fileName = $uploadedFile['name'];
-        $fileType = mime_content_type($filePath);
-
-        $chMedia = curl_init($mediaUploadUrl);
-        curl_setopt_array($chMedia, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                $auth,
-                'Content-Disposition: attachment; filename="' . $fileName . '"',
-                'Content-Type: ' . $fileType,
-            ],
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => file_get_contents($filePath),
-        ]);
-        $uploadResponse = curl_exec($chMedia);
-        $uploadResult = json_decode($uploadResponse, true);
-        curl_close($chMedia);
-
-        if (!empty($uploadResult['id'])) {
-            $featuredMediaId = $uploadResult['id'];
-        }
-    }
-
     $postData = [
         'title' => $title,
         'content' => $content,
@@ -108,10 +80,6 @@ function createPostForDomain($domain, $username, $password, $title, $content, $c
         'categories' => $categoryIds,
         'tags' => $tagIds,
     ];
-
-    if ($featuredMediaId) {
-        $postData['featured_media'] = $featuredMediaId;
-    }
 
     $ch = curl_init($apiUrl);
     curl_setopt_array($ch, [
@@ -238,7 +206,7 @@ function wpPost($url, $auth, $data) {
                         <textarea name="postContent" class="form-control mb-2" rows="5" placeholder="Konten..."><?= htmlspecialchars($_POST['postContent'] ?? '') ?></textarea>
                         <small class="text-muted">Gunakan <code>@Domain</code> dan <code>@Judul</code> untuk replace otomatis.</small>
 
-                        <div class="row mt-3">
+                        <div class="row mt-3 mb-2">
                             <div class="col">
                                 <label class="form-label">Kategori</label>
                                 <textarea name="categories" class="form-control" rows="3" placeholder="Misal: News, Tutorial"><?= htmlspecialchars($_POST['categories'] ?? '') ?></textarea>
@@ -248,9 +216,6 @@ function wpPost($url, $auth, $data) {
                                 <textarea name="tags" class="form-control" rows="3" placeholder="Misal: WordPress, Otomatis"><?= htmlspecialchars($_POST['tags'] ?? '') ?></textarea>
                             </div>
                         </div>
-
-                        <label class="form-label mt-3">Gambar Thumbnail</label>
-                        <input type="file" name="thumbnail" class="form-control mb-3" placeholder="https://example.com/image.jpg" value="<?= htmlspecialchars($_POST['thumbnail'] ?? '') ?>">
 
                         <button class="btn btn-primary mt-2 px-4 py-2">Jalankan Post</button>
 
