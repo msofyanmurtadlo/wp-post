@@ -57,130 +57,157 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags) {
-    $multiHandle = curl_multi_init();
+    $domainResults = [];
+    $mh = curl_multi_init(); // Inisialisasi curl multi handler
     $curlHandles = [];
-    $domainResults = [];
-    $batchSize = 20;
-    $batchedDomains = array_chunk($domains, $batchSize);
-
-    foreach ($batchedDomains as $batch) {
-        $batchResults = sendBatchRequests($batch, $postTitle, $postContent, $categories, $tags, $multiHandle, $curlHandles);
-        $domainResults = array_merge($domainResults, $batchResults);
-    }
-
-    curl_multi_close($multiHandle);
-    return $domainResults;
-}
-
-function sendBatchRequests($domains, $postTitle, $postContent, $categories, $tags, $multiHandle, &$curlHandles) {
-    $domainResults = [];
 
     foreach ($domains as $domainData) {
-        $parts = explode(":", $domainData);
-        if (count($parts) < 3) {
-            $domainResults[$domainData] = "Format salah";
-            continue;
-        }
+        $domainParts = explode(":", $domainData);
+        $domain = $domainParts[0];
 
-        list($domain, $username, $password) = $parts;
-
-        $content = str_replace('@Domain', $domain, $postContent);
-        $content = str_replace('@Judul', $postTitle, $content);
-
-        $apiUrl = "https://$domain/wp-json/wp/v2/posts";
-        $auth = 'Authorization: Basic ' . base64_encode("$username:$password");
-
-        $categoryIds = [];
-        foreach ($categories as $cat) {
-            $id = getCategoryIdOrCreate($domain, $auth, $cat);
-            if ($id) $categoryIds[] = $id;
-        }
-
-        $tagIds = [];
-        foreach ($tags as $tag) {
-            $id = getTagIdOrCreate($domain, $auth, $tag);
-            if ($id) $tagIds[] = $id;
-        }
-
-        $postData = [
-            'title' => $postTitle,
-            'content' => $content,
-            'status' => 'draft',
-            'categories' => $categoryIds,
-            'tags' => $tagIds,
-        ];
-
-        $ch = curl_init($apiUrl);
+        $ch = curl_init();
         curl_setopt_array($ch, [
+            CURLOPT_URL => "https://$domain/wp-json/wp/v2/posts",
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [$auth, 'Content-Type: application/json'],
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($postData),
-            CURLOPT_TIMEOUT => 60,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Basic ' . base64_encode($domainParts[1] . ':' . $domainParts[2]),
+                'Content-Type: application/json'
+            ],
+            CURLOPT_POSTFIELDS => json_encode([
+                'title' => $postTitle,
+                'content' => str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postContent),
+                'status' => 'draft',
+                'categories' => getCategoryIds($domain, $categories),
+                'tags' => getTagIds($domain, $tags),
+            ]),
+            CURLOPT_TIMEOUT => 30,
         ]);
 
-        curl_multi_add_handle($multiHandle, $ch);
-        $curlHandles[] = $ch;
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[$domain] = $ch;
     }
 
+    // Eksekusi multi curl
     do {
-        $status = curl_multi_exec($multiHandle, $active);
-        if ($active) {
-            curl_multi_select($multiHandle);
-        }
+        $status = curl_multi_exec($mh, $active);
     } while ($active && $status == CURLM_OK);
 
-    foreach ($curlHandles as $i => $ch) {
+    // Ambil hasil request
+    foreach ($curlHandles as $domain => $ch) {
         $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $domain = explode(":", $domains[$i])[0];
-        if ($code == 201) {
-            $domainResults[$domain] = true;
-        } else {
-            $domainResults[$domain] = "Gagal (HTTP $code)";
-        }
-        curl_multi_remove_handle($multiHandle, $ch);
+        curl_multi_remove_handle($mh, $ch);
+        $domainResults[$domain] = ($code == 201) ? true : "Gagal (HTTP $code)";
     }
 
+    curl_multi_close($mh); // Tutup multi curl handle
     return $domainResults;
 }
 
-function getCategoryIdOrCreate($domain, $auth, $name) {
-    $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
-    $response = wpGet($url, $auth);
-    if (!empty($response[0]['id']) && strtolower($response[0]['name']) === strtolower($name)) {
-        return $response[0]['id'];
+function getCategoryIds($domain, $categories) {
+    $categoryIds = [];
+    $mh = curl_multi_init(); // Inisialisasi curl multi handler
+    $curlHandles = [];
+
+    foreach ($categories as $cat) {
+        $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($cat);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$domain:$domain")],
+        ]);
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[$cat] = $ch;
     }
-    $created = wpPost("https://$domain/wp-json/wp/v2/categories", $auth, ['name' => $name]);
-    return $created['id'] ?? null;
+
+    // Eksekusi multi curl
+    do {
+        $status = curl_multi_exec($mh, $active);
+    } while ($active && $status == CURLM_OK);
+
+    // Ambil hasil request untuk kategori
+    foreach ($curlHandles as $cat => $ch) {
+        $response = curl_multi_getcontent($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_multi_remove_handle($mh, $ch);
+        if ($code == 200) {
+            $responseData = json_decode($response, true);
+            if (!empty($responseData[0]['id'])) {
+                $categoryIds[] = $responseData[0]['id'];
+            } else {
+                $categoryIds[] = createCategory($domain, $cat);
+            }
+        } else {
+            $categoryIds[] = createCategory($domain, $cat); // Jika gagal, buat kategori baru
+        }
+    }
+
+    curl_multi_close($mh); // Tutup multi curl handle
+    return $categoryIds;
 }
 
-function getTagIdOrCreate($domain, $auth, $name) {
-    $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
-    $response = wpGet($url, $auth);
-    if (!empty($response[0]['id']) && strtolower($response[0]['name']) === strtolower($name)) {
-        return $response[0]['id'];
+function getTagIds($domain, $tags) {
+    $tagIds = [];
+    $mh = curl_multi_init(); // Inisialisasi curl multi handler
+    $curlHandles = [];
+
+    foreach ($tags as $tag) {
+        $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($tag);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$domain:$domain")],
+        ]);
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[$tag] = $ch;
     }
-    $created = wpPost("https://$domain/wp-json/wp/v2/tags", $auth, ['name' => $name]);
-    return $created['id'] ?? null;
+
+    // Eksekusi multi curl
+    do {
+        $status = curl_multi_exec($mh, $active);
+    } while ($active && $status == CURLM_OK);
+
+    // Ambil hasil request untuk tag
+    foreach ($curlHandles as $tag => $ch) {
+        $response = curl_multi_getcontent($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_multi_remove_handle($mh, $ch);
+        if ($code == 200) {
+            $responseData = json_decode($response, true);
+            if (!empty($responseData[0]['id'])) {
+                $tagIds[] = $responseData[0]['id'];
+            } else {
+                $tagIds[] = createTag($domain, $tag);
+            }
+        } else {
+            $tagIds[] = createTag($domain, $tag); // Jika gagal, buat tag baru
+        }
+    }
+
+    curl_multi_close($mh); // Tutup multi curl handle
+    return $tagIds;
 }
 
-function wpGet($url, $auth) {
+function createCategory($domain, $name) {
+    $url = "https://$domain/wp-json/wp/v2/categories";
+    $data = ['name' => $name];
+    $response = wpPost($url, $domain, $data);
+    return $response['id'] ?? null;
+}
+
+function createTag($domain, $name) {
+    $url = "https://$domain/wp-json/wp/v2/tags";
+    $data = ['name' => $name];
+    $response = wpPost($url, $domain, $data);
+    return $response['id'] ?? null;
+}
+
+function wpPost($url, $domain, $data) {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [$auth],
-    ]);
-    $res = curl_exec($ch);
-    curl_close($ch);
-    return json_decode($res, true);
-}
-
-function wpPost($url, $auth, $data) {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [$auth, 'Content-Type: application/json'],
+        CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$domain:$domain"), 'Content-Type: application/json'],
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($data),
     ]);
@@ -268,7 +295,7 @@ function wpPost($url, $auth, $data) {
                             </div>
                         </div>
 
-                        <button type="submit" class="btn btn-primary mt-2 px-4 py-2">Jalankan Post</button>
+                        <button type="submit" class="btn btn-primary mt-2 px-4 py-2" id="submitBtn">Jalankan Post</button>
 
                         <textarea id="logOutput" class="form-control mt-3" rows="10" placeholder="Log Postingan Akan Di Tampilkan Disini" readonly></textarea>
                     </div>
@@ -285,7 +312,8 @@ function wpPost($url, $auth, $data) {
 
             var formData = $(this).serialize();
 
-            $('#logOutput').val('Proses dimulai...');
+            $('#logOutput').val('Sedang Memproses...'); // Tampilkan status "Memproses"
+            $('#submitBtn').text('Memproses...').prop('disabled', true); // Ubah tombol dan nonaktifkan
 
             $.ajax({
                 url: '',
@@ -293,9 +321,11 @@ function wpPost($url, $auth, $data) {
                 data: formData,
                 success: function(response) {
                     $('#logOutput').val(response);
+                    $('#submitBtn').text('Jalankan Post').prop('disabled', false); // Ganti tombol setelah selesai
                 },
                 error: function(xhr, status, error) {
                     $('#logOutput').val('Terjadi kesalahan: ' + error);
+                    $('#submitBtn').text('Jalankan Post').prop('disabled', false); // Ganti tombol setelah selesai
                 }
             });
         });
