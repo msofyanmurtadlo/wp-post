@@ -24,19 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $responseMessage = 'Tag tidak boleh kosong.';
             $responseType = 'danger';
         } else {
+            // Call the asynchronous function
+            $domainResults = createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags);
+
             $successDomains = [];
             $failedDomains = [];
-
-            foreach ($domains as $domainData) {
-                $parts = explode(":", $domainData);
-                if (count($parts) < 3) {
-                    $failedDomains[] = "Format salah: $domainData";
-                    continue;
-                }
-
-                list($domain, $username, $password) = $parts;
-
-                $result = createPostForDomain($domain, $username, $password, $postTitle, $postContent, $categories, $tags);
+            foreach ($domainResults as $domain => $result) {
                 if ($result === true) {
                     $successDomains[] = $domain;
                 } else {
@@ -54,45 +47,85 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-function createPostForDomain($domain, $username, $password, $title, $content, $categories, $tags) {
-    $content = str_replace('@Domain', $domain, $content);
-    $content = str_replace('@Judul', $title, $content);
+function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags) {
+    $multiHandle = curl_multi_init();
+    $curlHandles = [];
+    $domainResults = [];
 
-    $apiUrl = "https://$domain/wp-json/wp/v2/posts";
-    $auth = 'Authorization: Basic ' . base64_encode("$username:$password");
+    foreach ($domains as $domainData) {
+        $parts = explode(":", $domainData);
+        if (count($parts) < 3) {
+            $domainResults[$domainData] = "Format salah";
+            continue;
+        }
 
-    $categoryIds = [];
-    foreach ($categories as $cat) {
-        $id = getCategoryIdOrCreate($domain, $auth, $cat);
-        if ($id) $categoryIds[] = $id;
+        list($domain, $username, $password) = $parts;
+
+        // Prepare post data
+        $content = str_replace('@Domain', $domain, $postContent);
+        $content = str_replace('@Judul', $postTitle, $content);
+
+        $apiUrl = "https://$domain/wp-json/wp/v2/posts";
+        $auth = 'Authorization: Basic ' . base64_encode("$username:$password");
+
+        // Prepare category and tag IDs
+        $categoryIds = [];
+        foreach ($categories as $cat) {
+            $id = getCategoryIdOrCreate($domain, $auth, $cat);
+            if ($id) $categoryIds[] = $id;
+        }
+
+        $tagIds = [];
+        foreach ($tags as $tag) {
+            $id = getTagIdOrCreate($domain, $auth, $tag);
+            if ($id) $tagIds[] = $id;
+        }
+
+        // Create post data
+        $postData = [
+            'title' => $postTitle,
+            'content' => $content,
+            'status' => 'draft',
+            'categories' => $categoryIds,
+            'tags' => $tagIds,
+        ];
+
+        // Initialize cURL handle
+        $ch = curl_init($apiUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [$auth, 'Content-Type: application/json'],
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($postData),
+        ]);
+
+        // Add the handle to multi handle
+        curl_multi_add_handle($multiHandle, $ch);
+        $curlHandles[] = $ch;
     }
 
-    $tagIds = [];
-    foreach ($tags as $tag) {
-        $id = getTagIdOrCreate($domain, $auth, $tag);
-        if ($id) $tagIds[] = $id;
+    // Execute multi cURL
+    do {
+        $status = curl_multi_exec($multiHandle, $active);
+        if ($active) {
+            curl_multi_select($multiHandle);
+        }
+    } while ($active && $status == CURLM_OK);
+
+    // Collect responses
+    foreach ($curlHandles as $i => $ch) {
+        $response = curl_multi_getcontent($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if ($code == 201) {
+            $domainResults[$domains[$i]] = true;
+        } else {
+            $domainResults[$domains[$i]] = "Gagal (HTTP $code)";
+        }
+        curl_multi_remove_handle($multiHandle, $ch);
     }
 
-    $postData = [
-        'title' => $title,
-        'content' => $content,
-        'status' => 'draft',
-        'categories' => $categoryIds,
-        'tags' => $tagIds,
-    ];
-
-    $ch = curl_init($apiUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [$auth, 'Content-Type: application/json'],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($postData),
-    ]);
-    $response = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    return $code === 201 ? true : "Gagal (HTTP $code)";
+    curl_multi_close($multiHandle);
+    return $domainResults;
 }
 
 function getCategoryIdOrCreate($domain, $auth, $name) {
