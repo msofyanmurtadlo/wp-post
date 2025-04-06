@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags) {
     $domainResults = [];
-    $mh = curl_multi_init(); // Inisialisasi curl multi handler
+    $mh = curl_multi_init();
     $curlHandles = [];
 
     foreach ($domains as $domainData) {
@@ -88,12 +88,10 @@ function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categor
         $curlHandles[$domain] = $ch;
     }
 
-    // Eksekusi multi curl
     do {
         $status = curl_multi_exec($mh, $active);
     } while ($active && $status == CURLM_OK);
 
-    // Ambil hasil request
     foreach ($curlHandles as $domain => $ch) {
         $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -101,13 +99,13 @@ function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categor
         $domainResults[$domain] = ($code == 201) ? true : "Gagal (HTTP $code)";
     }
 
-    curl_multi_close($mh); // Tutup multi curl handle
+    curl_multi_close($mh);
     return $domainResults;
 }
 
 function getCategoryIds($domain, $categories) {
     $categoryIds = [];
-    $mh = curl_multi_init(); // Inisialisasi curl multi handler
+    $mh = curl_multi_init();
     $curlHandles = [];
 
     foreach ($categories as $cat) {
@@ -121,12 +119,10 @@ function getCategoryIds($domain, $categories) {
         $curlHandles[$cat] = $ch;
     }
 
-    // Eksekusi multi curl
     do {
         $status = curl_multi_exec($mh, $active);
     } while ($active && $status == CURLM_OK);
 
-    // Ambil hasil request untuk kategori
     foreach ($curlHandles as $cat => $ch) {
         $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -139,17 +135,17 @@ function getCategoryIds($domain, $categories) {
                 $categoryIds[] = createCategory($domain, $cat);
             }
         } else {
-            $categoryIds[] = createCategory($domain, $cat); // Jika gagal, buat kategori baru
+            $categoryIds[] = createCategory($domain, $cat);
         }
     }
 
-    curl_multi_close($mh); // Tutup multi curl handle
+    curl_multi_close($mh);
     return $categoryIds;
 }
 
 function getTagIds($domain, $tags) {
     $tagIds = [];
-    $mh = curl_multi_init(); // Inisialisasi curl multi handler
+    $mh = curl_multi_init();
     $curlHandles = [];
 
     foreach ($tags as $tag) {
@@ -163,12 +159,10 @@ function getTagIds($domain, $tags) {
         $curlHandles[$tag] = $ch;
     }
 
-    // Eksekusi multi curl
     do {
         $status = curl_multi_exec($mh, $active);
     } while ($active && $status == CURLM_OK);
 
-    // Ambil hasil request untuk tag
     foreach ($curlHandles as $tag => $ch) {
         $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -181,11 +175,11 @@ function getTagIds($domain, $tags) {
                 $tagIds[] = createTag($domain, $tag);
             }
         } else {
-            $tagIds[] = createTag($domain, $tag); // Jika gagal, buat tag baru
+            $tagIds[] = createTag($domain, $tag);
         }
     }
 
-    curl_multi_close($mh); // Tutup multi curl handle
+    curl_multi_close($mh);
     return $tagIds;
 }
 
@@ -312,8 +306,8 @@ function wpPost($url, $domain, $data) {
 
             var formData = $(this).serialize();
 
-            $('#logOutput').val('Sedang Memproses...'); // Tampilkan status "Memproses"
-            $('#submitBtn').text('Memproses...').prop('disabled', true); // Ubah tombol dan nonaktifkan
+            $('#logOutput').val('Sedang Memproses...');
+            $('#submitBtn').text('Memproses...').prop('disabled', true);
 
             $.ajax({
                 url: '',
@@ -321,11 +315,11 @@ function wpPost($url, $domain, $data) {
                 data: formData,
                 success: function(response) {
                     $('#logOutput').val(response);
-                    $('#submitBtn').text('Jalankan Post').prop('disabled', false); // Ganti tombol setelah selesai
+                    $('#submitBtn').text('Jalankan Post').prop('disabled', false);
                 },
                 error: function(xhr, status, error) {
                     $('#logOutput').val('Terjadi kesalahan: ' + error);
-                    $('#submitBtn').text('Jalankan Post').prop('disabled', false); // Ganti tombol setelah selesai
+                    $('#submitBtn').text('Jalankan Post').prop('disabled', false);
                 }
             });
         });
