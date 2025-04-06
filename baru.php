@@ -1,10 +1,16 @@
 <?php
+set_time_limit(0);
+ini_set('max_execution_time', 0);
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $postTitle = $_POST['postTitle'] ?? '';
     $postContent = $_POST['postContent'] ?? '';
     $domainInput = $_POST['domain'] ?? '';
     $categories = $_POST['categories'] ?? '';
     $tags = $_POST['tags'] ?? '';
+
+    $responseMessage = '';
+    $responseType = '';
 
     if (empty($postTitle) || empty($postContent)) {
         $responseMessage = 'Judul dan konten harus diisi.';
@@ -24,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $responseMessage = 'Tag tidak boleh kosong.';
             $responseType = 'danger';
         } else {
-            // Call the asynchronous function
             $domainResults = createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags);
 
             $successDomains = [];
@@ -33,23 +38,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if ($result === true) {
                     $successDomains[] = $domain;
                 } else {
-                    $failedDomains[] = "$domain: $result";
+                    $failedDomains[] = $domain;
                 }
             }
 
+            $responseMessage = '';
             if ($successDomains) {
-                $successMessage = "Post berhasil di: " . implode(', ', $successDomains);
+                $responseMessage .= implode("\n", array_map(fn($domain) => "$domain berhasil", $successDomains)) . "\n";
             }
             if ($failedDomains) {
-                $failedMessage = "Gagal di: " . implode(', ', $failedDomains);
+                $responseMessage .= implode("\n", array_map(fn($domain) => "$domain gagal", $failedDomains)) . "\n";
             }
         }
     }
+
+    echo $responseMessage;
+    exit;
 }
 
 function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags) {
     $multiHandle = curl_multi_init();
     $curlHandles = [];
+    $domainResults = [];
+    $batchSize = 20;
+    $batchedDomains = array_chunk($domains, $batchSize);
+
+    foreach ($batchedDomains as $batch) {
+        $batchResults = sendBatchRequests($batch, $postTitle, $postContent, $categories, $tags, $multiHandle, $curlHandles);
+        $domainResults = array_merge($domainResults, $batchResults);
+    }
+
+    curl_multi_close($multiHandle);
+    return $domainResults;
+}
+
+function sendBatchRequests($domains, $postTitle, $postContent, $categories, $tags, $multiHandle, &$curlHandles) {
     $domainResults = [];
 
     foreach ($domains as $domainData) {
@@ -61,14 +84,12 @@ function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categor
 
         list($domain, $username, $password) = $parts;
 
-        // Prepare post data
         $content = str_replace('@Domain', $domain, $postContent);
         $content = str_replace('@Judul', $postTitle, $content);
 
         $apiUrl = "https://$domain/wp-json/wp/v2/posts";
         $auth = 'Authorization: Basic ' . base64_encode("$username:$password");
 
-        // Prepare category and tag IDs
         $categoryIds = [];
         foreach ($categories as $cat) {
             $id = getCategoryIdOrCreate($domain, $auth, $cat);
@@ -81,7 +102,6 @@ function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categor
             if ($id) $tagIds[] = $id;
         }
 
-        // Create post data
         $postData = [
             'title' => $postTitle,
             'content' => $content,
@@ -90,21 +110,19 @@ function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categor
             'tags' => $tagIds,
         ];
 
-        // Initialize cURL handle
         $ch = curl_init($apiUrl);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => [$auth, 'Content-Type: application/json'],
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode($postData),
+            CURLOPT_TIMEOUT => 60,
         ]);
 
-        // Add the handle to multi handle
         curl_multi_add_handle($multiHandle, $ch);
         $curlHandles[] = $ch;
     }
 
-    // Execute multi cURL
     do {
         $status = curl_multi_exec($multiHandle, $active);
         if ($active) {
@@ -112,19 +130,18 @@ function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categor
         }
     } while ($active && $status == CURLM_OK);
 
-    // Collect responses
     foreach ($curlHandles as $i => $ch) {
         $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $domain = explode(":", $domains[$i])[0];
         if ($code == 201) {
-            $domainResults[$domains[$i]] = true;
+            $domainResults[$domain] = true;
         } else {
-            $domainResults[$domains[$i]] = "Gagal (HTTP $code)";
+            $domainResults[$domain] = "Gagal (HTTP $code)";
         }
         curl_multi_remove_handle($multiHandle, $ch);
     }
 
-    curl_multi_close($multiHandle);
     return $domainResults;
 }
 
@@ -180,6 +197,7 @@ function wpPost($url, $auth, $data) {
     <title>WP POSTER</title>
     <link rel="icon" href="https://s.w.org/favicon.ico" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         body {
             background-color: #f0f2f5;
@@ -224,7 +242,7 @@ function wpPost($url, $auth, $data) {
             <p class="mb-0 text-light small">Posting cepat ke banyak domain WordPress hanya dengan sekali klik.</p>
         </div>
         <div class="p-4">
-            <form method="POST">
+            <form id="postForm">
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Daftar Domain</label>
@@ -250,19 +268,38 @@ function wpPost($url, $auth, $data) {
                             </div>
                         </div>
 
-                        <button class="btn btn-primary mt-2 px-4 py-2">Jalankan Post</button>
+                        <button type="submit" class="btn btn-primary mt-2 px-4 py-2">Jalankan Post</button>
 
-                        <?php if (!empty($successMessage)): ?>
-                            <div class="alert alert-success mt-3"><?= $successMessage ?></div>
-                        <?php endif; ?>
-                        <?php if (!empty($failedMessage)): ?>
-                            <div class="alert alert-danger mt-3"><?= $failedMessage ?></div>
-                        <?php endif; ?>
+                        <textarea id="logOutput" class="form-control mt-3" rows="10" placeholder="Log Postingan Akan Di Tampilkan Disini" readonly></textarea>
                     </div>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<script>
+    $(document).ready(function() {
+        $('#postForm').on('submit', function(event) {
+            event.preventDefault();
+
+            var formData = $(this).serialize();
+
+            $('#logOutput').val('Proses dimulai...');
+
+            $.ajax({
+                url: '',
+                type: 'POST',
+                data: formData,
+                success: function(response) {
+                    $('#logOutput').val(response);
+                },
+                error: function(xhr, status, error) {
+                    $('#logOutput').val('Terjadi kesalahan: ' + error);
+                }
+            });
+        });
+    });
+</script>
 </body>
 </html>
