@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $responseMessage = 'Tag tidak boleh kosong.';
             $responseType = 'danger';
         } else {
-            $domainResults = createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags);
+            $domainResults = createPostsForDomains($domains, $postTitle, $postContent, $categories, $tags);
 
             $successDomains = [];
             $failedDomains = [];
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if ($result === true) {
                     $successDomains[] = $domain;
                 } else {
-                    $failedDomains[] = $domain;
+                    $failedDomains[] = "$domain ($result)";
                 }
             }
 
@@ -56,152 +56,121 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-function createPostsForDomainsAsync($domains, $postTitle, $postContent, $categories, $tags) {
+function createPostsForDomains($domains, $postTitle, $postContent, $categories, $tags) {
     $domainResults = [];
-    $mh = curl_multi_init();
-    $curlHandles = [];
 
     foreach ($domains as $domainData) {
-        $domainParts = explode(":", $domainData);
-        $domain = $domainParts[0];
+        $parts = explode(':', $domainData);
+        if (count($parts) !== 3) {
+            $domainResults[$domainData] = "Format tidak valid";
+            continue;
+        }
 
-        $ch = curl_init();
+        [$domain, $username, $password] = $parts;
+
+        $catIds = getCategoryIds($domain, $username, $password, $categories);
+        $tagIds = getTagIds($domain, $username, $password, $tags);
+
+        $postData = [
+            'title' => $postTitle,
+            'content' => str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postContent),
+            'status' => 'draft',
+            'categories' => $catIds,
+            'tags' => $tagIds
+        ];
+
+        $ch = curl_init("https://$domain/wp-json/wp/v2/posts");
         curl_setopt_array($ch, [
-            CURLOPT_URL => "https://$domain/wp-json/wp/v2/posts",
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => [
-                'Authorization: Basic ' . base64_encode($domainParts[1] . ':' . $domainParts[2]),
+                'Authorization: Basic ' . base64_encode("$username:$password"),
                 'Content-Type: application/json'
             ],
-            CURLOPT_POSTFIELDS => json_encode([
-                'title' => $postTitle,
-                'content' => str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postContent),
-                'status' => 'draft',
-                'categories' => getCategoryIds($domain, $categories),
-                'tags' => getTagIds($domain, $tags),
-            ]),
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_POSTFIELDS => json_encode($postData),
+            CURLOPT_TIMEOUT => 30
         ]);
 
-        curl_multi_add_handle($mh, $ch);
-        $curlHandles[$domain] = $ch;
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $domainResults[$domain] = ($httpCode == 201) ? true : "HTTP $httpCode";
     }
 
-    do {
-        $status = curl_multi_exec($mh, $active);
-    } while ($active && $status == CURLM_OK);
-
-    foreach ($curlHandles as $domain => $ch) {
-        $response = curl_multi_getcontent($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_multi_remove_handle($mh, $ch);
-        $domainResults[$domain] = ($code == 201) ? true : "Gagal (HTTP $code)";
-    }
-
-    curl_multi_close($mh);
     return $domainResults;
 }
 
-function getCategoryIds($domain, $categories) {
-    $categoryIds = [];
-    $mh = curl_multi_init();
-    $curlHandles = [];
+function getCategoryIds($domain, $username, $password, $categories) {
+    $ids = [];
 
-    foreach ($categories as $cat) {
-        $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($cat);
+    foreach ($categories as $name) {
+        $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$domain:$domain")],
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
         ]);
-        curl_multi_add_handle($mh, $ch);
-        $curlHandles[$cat] = $ch;
-    }
-
-    do {
-        $status = curl_multi_exec($mh, $active);
-    } while ($active && $status == CURLM_OK);
-
-    foreach ($curlHandles as $cat => $ch) {
-        $response = curl_multi_getcontent($ch);
+        $response = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_multi_remove_handle($mh, $ch);
-        if ($code == 200) {
-            $responseData = json_decode($response, true);
-            if (!empty($responseData[0]['id'])) {
-                $categoryIds[] = $responseData[0]['id'];
-            } else {
-                $categoryIds[] = createCategory($domain, $cat);
-            }
+        curl_close($ch);
+
+        if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
+            $ids[] = $data[0]['id'];
         } else {
-            $categoryIds[] = createCategory($domain, $cat);
+            $created = createCategory($domain, $username, $password, $name);
+            if ($created) $ids[] = $created;
         }
     }
 
-    curl_multi_close($mh);
-    return $categoryIds;
+    return $ids;
 }
 
-function getTagIds($domain, $tags) {
-    $tagIds = [];
-    $mh = curl_multi_init();
-    $curlHandles = [];
+function getTagIds($domain, $username, $password, $tags) {
+    $ids = [];
 
-    foreach ($tags as $tag) {
-        $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($tag);
+    foreach ($tags as $name) {
+        $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$domain:$domain")],
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
         ]);
-        curl_multi_add_handle($mh, $ch);
-        $curlHandles[$tag] = $ch;
-    }
-
-    do {
-        $status = curl_multi_exec($mh, $active);
-    } while ($active && $status == CURLM_OK);
-
-    foreach ($curlHandles as $tag => $ch) {
-        $response = curl_multi_getcontent($ch);
+        $response = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_multi_remove_handle($mh, $ch);
-        if ($code == 200) {
-            $responseData = json_decode($response, true);
-            if (!empty($responseData[0]['id'])) {
-                $tagIds[] = $responseData[0]['id'];
-            } else {
-                $tagIds[] = createTag($domain, $tag);
-            }
+        curl_close($ch);
+
+        if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
+            $ids[] = $data[0]['id'];
         } else {
-            $tagIds[] = createTag($domain, $tag);
+            $created = createTag($domain, $username, $password, $name);
+            if ($created) $ids[] = $created;
         }
     }
 
-    curl_multi_close($mh);
-    return $tagIds;
+    return $ids;
 }
 
-function createCategory($domain, $name) {
+function createCategory($domain, $username, $password, $name) {
     $url = "https://$domain/wp-json/wp/v2/categories";
-    $data = ['name' => $name];
-    $response = wpPost($url, $domain, $data);
+    $response = wpPost($url, $username, $password, ['name' => $name]);
     return $response['id'] ?? null;
 }
 
-function createTag($domain, $name) {
+function createTag($domain, $username, $password, $name) {
     $url = "https://$domain/wp-json/wp/v2/tags";
-    $data = ['name' => $name];
-    $response = wpPost($url, $domain, $data);
+    $response = wpPost($url, $username, $password, ['name' => $name]);
     return $response['id'] ?? null;
 }
 
-function wpPost($url, $domain, $data) {
+function wpPost($url, $username, $password, $data) {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$domain:$domain"), 'Content-Type: application/json'],
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Basic ' . base64_encode("$username:$password"),
+            'Content-Type: application/json'
+        ],
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($data),
     ]);
@@ -220,39 +189,21 @@ function wpPost($url, $domain, $data) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body {
-            background-color: #f0f2f5;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .main-card {
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            overflow: hidden;
-            background: white;
-        }
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .main-card { border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: white; }
         .card-header-custom {
             background: linear-gradient(135deg, #4e73df, #6f42c1);
             color: white;
             padding: 1.5rem;
         }
-        .card-header-custom h3 {
-            margin: 0;
-            font-weight: 600;
-        }
-        .form-label {
-            font-weight: 600;
-        }
-        textarea, input {
-            border-radius: 10px;
-        }
+        .form-label { font-weight: 600; }
+        textarea, input { border-radius: 10px; }
         .btn-primary {
             background-color: #4e73df;
             border: none;
             transition: all 0.3s ease;
         }
-        .btn-primary:hover {
-            background-color: #375ab6;
-        }
+        .btn-primary:hover { background-color: #375ab6; }
     </style>
 </head>
 <body>
@@ -303,9 +254,7 @@ function wpPost($url, $domain, $data) {
     $(document).ready(function() {
         $('#postForm').on('submit', function(event) {
             event.preventDefault();
-
             var formData = $(this).serialize();
-
             $('#logOutput').val('Sedang Memproses...');
             $('#submitBtn').text('Memproses...').prop('disabled', true);
 
