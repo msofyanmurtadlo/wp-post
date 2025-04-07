@@ -7,6 +7,7 @@ ob_end_flush();
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $postTitle = $_POST['postTitle'] ?? '';
     $postContent = $_POST['postContent'] ?? '';
+    $excerpt = $_POST['excerpt'] ?? '';
     $domainInput = $_POST['domain'] ?? '';
     $categories = $_POST['categories'] ?? '';
     $tags = $_POST['tags'] ?? '';
@@ -27,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif (empty($tags)) {
             $output .= '<span class="error">Error: Tag tidak boleh kosong.</span>' . "\n";
         } else {
-            $domainResults = createPostsForDomains($domains, $postTitle, $postContent, $categories, $tags);
+            $domainResults = createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $categories, $tags);
             foreach ($domainResults as $domain => $result) {
                 if ($result === true) {
                     echo '<span class="success">' . $domain . ' berhasil</span>' . "\n";
@@ -44,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-function createPostsForDomains($domains, $postTitle, $postContent, $categories, $tags) {
+function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $categories, $tags) {
     $domainResults = [];
 
     foreach ($domains as $domainData) {
@@ -56,12 +57,19 @@ function createPostsForDomains($domains, $postTitle, $postContent, $categories, 
 
         [$domain, $username, $password] = $parts;
 
+        // Fetch category IDs and tag IDs
         $catIds = getCategoryIds($domain, $username, $password, $categories);
         $tagIds = getTagIds($domain, $username, $password, $tags);
 
+        // Replace @Domain and @Judul in content and excerpt
+        $content = str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postContent);
+        $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $excerpt);
+
+        // Prepare the post data
         $postData = [
             'title' => $postTitle,
-            'content' => str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postContent),
+            'content' => $content,
+            'excerpt' => $excerpt,
             'status' => 'draft',
             'categories' => $catIds,
             'tags' => $tagIds
@@ -76,8 +84,8 @@ function createPostsForDomains($domains, $postTitle, $postContent, $categories, 
                 'Content-Type: application/json'
             ],
             CURLOPT_POSTFIELDS => json_encode($postData),
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_CONNECTTIMEOUT => 60,
+            CURLOPT_TIMEOUT => 120, // Increased timeout
+            CURLOPT_CONNECTTIMEOUT => 120, // Increased connection timeout
         ]);
 
         $response = curl_exec($ch);
@@ -230,11 +238,20 @@ function wpPost($url, $username, $password, $data) {
                         <small class="text-muted">Pisahkan per baris: <code>domain.com:username:password</code></small>
                     </div>
                     <div class="col-md-8">
-                        <label class="form-label">Judul Post</label>
-                        <input name="postTitle" class="form-control mb-3" placeholder="Judul" value="<?= htmlspecialchars($_POST['postTitle'] ?? '') ?>">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Judul Post</label>
+                                <input name="postTitle" class="form-control mb-3" placeholder="Judul" value="<?= htmlspecialchars($_POST['postTitle'] ?? '') ?>">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Deskripsi</label>
+                                <input name="excerpt" class="form-control mb-3" rows="3" placeholder="Deskripsi..."><?= htmlspecialchars($_POST['excerpt'] ?? '') ?>
+                            </div>
+                        </div>
 
                         <label class="form-label">Konten Post</label>
                         <textarea name="postContent" class="form-control mb-2" rows="5" placeholder="Konten..."><?= htmlspecialchars($_POST['postContent'] ?? '') ?></textarea>
+
                         <small class="text-muted">Gunakan <code>@Domain</code> dan <code>@Judul</code> untuk replace otomatis.</small>
 
                         <div class="row mt-3 mb-2">
