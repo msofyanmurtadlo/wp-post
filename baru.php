@@ -14,8 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $output = '';
 
-    if (empty($postTitle) || empty($postContent)) {
-        $output .= '<span class="error">Error: Judul dan konten harus diisi.</span>' . "\n";
+    if (empty($postTitle)) {
+        $output .= '<span class="error">Error: Judul harus diisi.</span>' . "\n";
+    } elseif (empty($postContent)) {
+        $output .= '<span class="error">Error: Konten harus diisi.</span>' . "\n";
+    } elseif (empty($excerpt)) {
+        $output .= '<span class="error">Error: Deskripsi harus diisi.</span>' . "\n";
     } elseif (empty($domainInput)) {
         $output .= '<span class="error">Error: Harap masukkan domain.</span>' . "\n";
     } else {
@@ -57,15 +61,12 @@ function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $ca
 
         [$domain, $username, $password] = $parts;
 
-        // Fetch category IDs and tag IDs
         $catIds = getCategoryIds($domain, $username, $password, $categories);
         $tagIds = getTagIds($domain, $username, $password, $tags);
 
-        // Replace @Domain and @Judul in content and excerpt
         $content = str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postContent);
         $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $excerpt);
 
-        // Prepare the post data
         $postData = [
             'title' => $postTitle,
             'content' => $content,
@@ -84,8 +85,8 @@ function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $ca
                 'Content-Type: application/json'
             ],
             CURLOPT_POSTFIELDS => json_encode($postData),
-            CURLOPT_TIMEOUT => 120, // Increased timeout
-            CURLOPT_CONNECTTIMEOUT => 120, // Increased connection timeout
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_CONNECTTIMEOUT => 120,
         ]);
 
         $response = curl_exec($ch);
@@ -197,26 +198,10 @@ function wpPost($url, $username, $password, $data) {
         }
         .form-label { font-weight: 600; color: #333; }
         textarea, input { border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .btn-primary {
-            background-color: #4e73df;
-            border: none;
-            transition: all 0.3s ease;
-        }
+        .btn-primary { background-color: #4e73df; border: none; transition: all 0.3s ease; }
         .btn-primary:hover { background-color: #375ab6; }
-        .card-footer {
-            background-color: #f8f9fc;
-            border-bottom-left-radius: 15px;
-            border-bottom-right-radius: 15px;
-            padding: 1rem;
-            text-align: center;
-        }
-        #logOutput {
-            background-color: #f1f1f1;
-            color: #000;
-            font-family: monospace;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
+        .card-footer { background-color: #f8f9fc; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; padding: 1rem; text-align: center; }
+        #logOutput { background-color: #f1f1f1; color: #000; font-family: monospace; white-space: pre-wrap; word-wrap: break-word; }
         .error { color: red; }
         .success { color: green; }
         .info { color: blue; }
@@ -245,15 +230,12 @@ function wpPost($url, $username, $password, $data) {
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Deskripsi</label>
-                                <input name="excerpt" class="form-control mb-3" rows="3" placeholder="Deskripsi..."><?= htmlspecialchars($_POST['excerpt'] ?? '') ?>
+                                <input name="excerpt" class="form-control mb-3" placeholder="Deskripsi" value="<?= htmlspecialchars($_POST['excerpt'] ?? '') ?>">
                             </div>
                         </div>
-
                         <label class="form-label">Konten Post</label>
                         <textarea name="postContent" class="form-control mb-2" rows="5" placeholder="Konten..."><?= htmlspecialchars($_POST['postContent'] ?? '') ?></textarea>
-
                         <small class="text-muted">Gunakan <code>@Domain</code> dan <code>@Judul</code> untuk replace otomatis.</small>
-
                         <div class="row mt-3 mb-2">
                             <div class="col">
                                 <label class="form-label">Kategori</label>
@@ -264,9 +246,7 @@ function wpPost($url, $username, $password, $data) {
                                 <textarea name="tags" class="form-control" rows="3" placeholder="Misal: WordPress, Otomatis"><?= htmlspecialchars($_POST['tags'] ?? '') ?></textarea>
                             </div>
                         </div>
-
                         <button type="submit" class="btn btn-primary mt-2 px-4 py-2" id="submitBtn">Jalankan Post</button>
-
                         <div id="logOutput" class="form-control mt-3" rows="10" readonly>Status postingan!!!</div>
                     </div>
                 </div>
@@ -274,7 +254,6 @@ function wpPost($url, $username, $password, $data) {
         </div>
     </div>
 </div>
-
 <script>
     $(document).ready(function() {
         $('#postForm').on('submit', function(event) {
@@ -282,7 +261,6 @@ function wpPost($url, $username, $password, $data) {
             var formData = $(this).serialize();
             $('#logOutput').text('Sedang Memproses...');
             $('#submitBtn').text('Memproses...').prop('disabled', true);
-
             $.ajax({
                 url: '',
                 type: 'POST',
@@ -299,6 +277,5 @@ function wpPost($url, $username, $password, $data) {
         });
     });
 </script>
-
 </body>
 </html>
