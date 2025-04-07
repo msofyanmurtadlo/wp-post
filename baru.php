@@ -16,10 +16,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if (empty($postTitle)) {
         $output .= '<span class="error">Error: Judul harus diisi.</span>' . "\n";
-    } elseif (empty($postContent)) {
-        $output .= '<span class="error">Error: Konten harus diisi.</span>' . "\n";
     } elseif (empty($excerpt)) {
         $output .= '<span class="error">Error: Deskripsi harus diisi.</span>' . "\n";
+    } elseif (empty($postContent)) {
+        $output .= '<span class="error">Error: Konten harus diisi.</span>' . "\n";
     } elseif (empty($domainInput)) {
         $output .= '<span class="error">Error: Harap masukkan domain.</span>' . "\n";
     } else {
