@@ -1,6 +1,8 @@
 <?php
 set_time_limit(0);
 ini_set('max_execution_time', 0);
+ob_implicit_flush(true);
+ob_end_flush();
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $postTitle = $_POST['postTitle'] ?? '';
@@ -9,50 +11,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $categories = $_POST['categories'] ?? '';
     $tags = $_POST['tags'] ?? '';
 
-    $responseMessage = '';
-    $responseType = '';
+    $output = '';
 
     if (empty($postTitle) || empty($postContent)) {
-        $responseMessage = 'Judul dan konten harus diisi.';
-        $responseType = 'danger';
+        $output .= '<span class="error">Error: Judul dan konten harus diisi.</span>' . "\n";
     } elseif (empty($domainInput)) {
-        $responseMessage = 'Harap masukkan domain.';
-        $responseType = 'danger';
+        $output .= '<span class="error">Error: Harap masukkan domain.</span>' . "\n";
     } else {
         $domains = array_filter(array_map('trim', explode("\n", $domainInput)));
         $categories = array_filter(array_map('trim', explode(',', $categories)));
         $tags = array_filter(array_map('trim', explode(',', $tags)));
 
         if (empty($categories)) {
-            $responseMessage = 'Kategori tidak boleh kosong.';
-            $responseType = 'danger';
+            $output .= '<span class="error">Error: Kategori tidak boleh kosong.</span>' . "\n";
         } elseif (empty($tags)) {
-            $responseMessage = 'Tag tidak boleh kosong.';
-            $responseType = 'danger';
+            $output .= '<span class="error">Error: Tag tidak boleh kosong.</span>' . "\n";
         } else {
             $domainResults = createPostsForDomains($domains, $postTitle, $postContent, $categories, $tags);
-
-            $successDomains = [];
-            $failedDomains = [];
             foreach ($domainResults as $domain => $result) {
                 if ($result === true) {
-                    $successDomains[] = $domain;
+                    echo '<span class="success">' . $domain . ' berhasil</span>' . "\n";
+                    flush();
                 } else {
-                    $failedDomains[] = "$domain ($result)";
+                    echo '<span class="error">' . $domain . ' gagal (' . $result . ')</span>' . "\n";
+                    flush();
                 }
-            }
-
-            $responseMessage = '';
-            if ($successDomains) {
-                $responseMessage .= implode("\n", array_map(fn($domain) => "$domain berhasil", $successDomains)) . "\n";
-            }
-            if ($failedDomains) {
-                $responseMessage .= implode("\n", array_map(fn($domain) => "$domain gagal", $failedDomains)) . "\n";
             }
         }
     }
-
-    echo $responseMessage;
     exit;
 }
 
@@ -88,14 +74,19 @@ function createPostsForDomains($domains, $postTitle, $postContent, $categories, 
                 'Content-Type: application/json'
             ],
             CURLOPT_POSTFIELDS => json_encode($postData),
-            CURLOPT_TIMEOUT => 30
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_CONNECTTIMEOUT => 60,
         ]);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $domainResults[$domain] = ($httpCode == 201) ? true : "HTTP $httpCode";
+        if ($httpCode == 201) {
+            $domainResults[$domain] = true;
+        } else {
+            $domainResults[$domain] = "HTTP $httpCode: " . ($response ? json_decode($response)->message : 'Tidak ada pesan');
+        }
     }
 
     return $domainResults;
@@ -103,7 +94,6 @@ function createPostsForDomains($domains, $postTitle, $postContent, $categories, 
 
 function getCategoryIds($domain, $username, $password, $categories) {
     $ids = [];
-
     foreach ($categories as $name) {
         $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
         $ch = curl_init($url);
@@ -122,13 +112,11 @@ function getCategoryIds($domain, $username, $password, $categories) {
             if ($created) $ids[] = $created;
         }
     }
-
     return $ids;
 }
 
 function getTagIds($domain, $username, $password, $tags) {
     $ids = [];
-
     foreach ($tags as $name) {
         $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
         $ch = curl_init($url);
@@ -147,7 +135,6 @@ function getTagIds($domain, $username, $password, $tags) {
             if ($created) $ids[] = $created;
         }
     }
-
     return $ids;
 }
 
@@ -189,21 +176,40 @@ function wpPost($url, $username, $password, $data) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .main-card { border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: white; }
+        body { background-color: #f4f4f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .main-card { border-radius: 15px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); background: #ffffff; }
         .card-header-custom {
             background: linear-gradient(135deg, #4e73df, #6f42c1);
             color: white;
             padding: 1.5rem;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
         }
-        .form-label { font-weight: 600; }
-        textarea, input { border-radius: 10px; }
+        .form-label { font-weight: 600; color: #333; }
+        textarea, input { border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .btn-primary {
             background-color: #4e73df;
             border: none;
             transition: all 0.3s ease;
         }
         .btn-primary:hover { background-color: #375ab6; }
+        .card-footer {
+            background-color: #f8f9fc;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+            padding: 1rem;
+            text-align: center;
+        }
+        #logOutput {
+            background-color: #f1f1f1;
+            color: #000;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
     </style>
 </head>
 <body>
@@ -242,7 +248,7 @@ function wpPost($url, $username, $password, $data) {
 
                         <button type="submit" class="btn btn-primary mt-2 px-4 py-2" id="submitBtn">Jalankan Post</button>
 
-                        <textarea id="logOutput" class="form-control mt-3" rows="10" placeholder="Log Postingan Akan Di Tampilkan Disini" readonly></textarea>
+                        <div id="logOutput" class="form-control mt-3" rows="10" readonly>Status postingan!!!</div>
                     </div>
                 </div>
             </form>
@@ -255,7 +261,7 @@ function wpPost($url, $username, $password, $data) {
         $('#postForm').on('submit', function(event) {
             event.preventDefault();
             var formData = $(this).serialize();
-            $('#logOutput').val('Sedang Memproses...');
+            $('#logOutput').text('Sedang Memproses...');
             $('#submitBtn').text('Memproses...').prop('disabled', true);
 
             $.ajax({
@@ -263,16 +269,17 @@ function wpPost($url, $username, $password, $data) {
                 type: 'POST',
                 data: formData,
                 success: function(response) {
-                    $('#logOutput').val(response);
+                    $('#logOutput').html(response);
                     $('#submitBtn').text('Jalankan Post').prop('disabled', false);
                 },
                 error: function(xhr, status, error) {
-                    $('#logOutput').val('Terjadi kesalahan: ' + error);
+                    $('#logOutput').html('<span class="error">Terjadi kesalahan: ' + error + '</span>');
                     $('#submitBtn').text('Jalankan Post').prop('disabled', false);
                 }
             });
         });
     });
 </script>
+
 </body>
 </html>
