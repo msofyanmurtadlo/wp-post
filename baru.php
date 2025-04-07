@@ -13,15 +13,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tags = $_POST['tags'] ?? '';
 
     $output = '';
-
-    if (empty($postTitle)) {
+    
+    if (empty($domainInput)) {
+        $output .= '<span class="error">Error: Harap masukkan domain.</span>' . "\n";
+    } elseif (empty($postTitle)) {
         $output .= '<span class="error">Error: Judul harus diisi.</span>' . "\n";
     } elseif (empty($excerpt)) {
         $output .= '<span class="error">Error: Deskripsi harus diisi.</span>' . "\n";
     } elseif (empty($postContent)) {
         $output .= '<span class="error">Error: Konten harus diisi.</span>' . "\n";
-    } elseif (empty($domainInput)) {
-        $output .= '<span class="error">Error: Harap masukkan domain.</span>' . "\n";
     } else {
         $domains = array_filter(array_map('trim', explode("\n", $domainInput)));
         $categories = array_filter(array_map('trim', explode(',', $categories)));
