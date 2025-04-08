@@ -7,7 +7,7 @@ ob_end_flush();
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $postTitle = $_POST['postTitle'] ?? '';
     $postContent = $_POST['postContent'] ?? '';
-    $excerpt = $_POST['excerpt'] ?? '';
+    $postexcerpt = $_POST['excerpt'] ?? '';
     $domainInput = $_POST['domain'] ?? '';
     $categories = $_POST['categories'] ?? '';
     $tags = $_POST['tags'] ?? '';
@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $output .= '<span class="error">Error: Harap masukkan domain.</span>' . "\n";
     } elseif (empty($postTitle)) {
         $output .= '<span class="error">Error: Judul harus diisi.</span>' . "\n";
-    } elseif (empty($excerpt)) {
+    } elseif (empty($postexcerpt)) {
         $output .= '<span class="error">Error: Deskripsi harus diisi.</span>' . "\n";
     } elseif (empty($postContent)) {
         $output .= '<span class="error">Error: Konten harus diisi.</span>' . "\n";
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $domainChunks = array_chunk($domains, $chunkSize);
 
             foreach ($domainChunks as $chunk) {
-                $domainResults = createPostsForDomains($chunk, $postTitle, $postContent, $excerpt, $categories, $tags);
+                $domainResults = createPostsForDomains($chunk, $postTitle, $postContent, $postexcerpt, $categories, $tags);
                 foreach ($domainResults as $domain => $result) {
                     if ($result === true) {
                         echo '<span class="success">' . $domain . ' berhasil</span>' . "\n";
@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $categories, $tags) {
+function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt, $categories, $tags) {
     $domainResults = [];
 
     $mh = curl_multi_init();
@@ -75,7 +75,7 @@ function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $ca
         $tagIds = getTagIds($domain, $username, $password, $tags);
 
         $content = str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postContent);
-        $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $excerpt);
+        $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $postTitle], $postexcerpt);
 
         $postData = [
             'title' => $postTitle,
