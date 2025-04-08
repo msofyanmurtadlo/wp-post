@@ -32,14 +32,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif (empty($tags)) {
             $output .= '<span class="error">Error: Tag tidak boleh kosong.</span>' . "\n";
         } else {
-            $domainResults = createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $categories, $tags);
-            foreach ($domainResults as $domain => $result) {
-                if ($result === true) {
-                    echo '<span class="success">' . $domain . ' berhasil</span>' . "\n";
-                    flush();
-                } else {
-                    echo '<span class="error">' . $domain . ' gagal (' . $result . ')</span>' . "\n";
-                    flush();
+            $chunkSize = 10;
+            $domainChunks = array_chunk($domains, $chunkSize);
+
+            foreach ($domainChunks as $chunk) {
+                $domainResults = createPostsForDomains($chunk, $postTitle, $postContent, $excerpt, $categories, $tags);
+                foreach ($domainResults as $domain => $result) {
+                    if ($result === true) {
+                        echo '<span class="success">' . $domain . ' berhasil</span>' . "\n";
+                        flush();
+                    } else {
+                        echo '<span class="error">' . $domain . ' gagal (' . $result . ')</span>' . "\n";
+                        flush();
+                    }
                 }
             }
         }
@@ -52,6 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $categories, $tags) {
     $domainResults = [];
 
+    $mh = curl_multi_init();
+    $curlHandles = [];
+    $domainNames = []; 
+
     foreach ($domains as $domainData) {
         $parts = explode(':', $domainData);
         if (count($parts) !== 3) {
@@ -61,6 +70,7 @@ function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $ca
 
         [$domain, $username, $password] = $parts;
 
+        $domainNames[] = $domain; 
         $catIds = getCategoryIds($domain, $username, $password, $categories);
         $tagIds = getTagIds($domain, $username, $password, $tags);
 
@@ -88,10 +98,22 @@ function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $ca
             CURLOPT_TIMEOUT => 120,
             CURLOPT_CONNECTTIMEOUT => 120,
         ]);
+        
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[] = $ch;
+    }
 
-        $response = curl_exec($ch);
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
+
+    foreach ($curlHandles as $index => $ch) {
+        $response = curl_multi_getcontent($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $domain = $domainNames[$index]; 
+        curl_multi_remove_handle($mh, $ch);
 
         if ($httpCode == 201) {
             $domainResults[$domain] = true;
@@ -100,11 +122,15 @@ function createPostsForDomains($domains, $postTitle, $postContent, $excerpt, $ca
         }
     }
 
+    curl_multi_close($mh);
     return $domainResults;
 }
 
 function getCategoryIds($domain, $username, $password, $categories) {
     $ids = [];
+    $mh = curl_multi_init();
+    $curlHandles = [];
+
     foreach ($categories as $name) {
         $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
         $ch = curl_init($url);
@@ -112,9 +138,20 @@ function getCategoryIds($domain, $username, $password, $categories) {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
         ]);
-        $response = curl_exec($ch);
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[] = [$ch, $name];
+    }
+
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
+
+    foreach ($curlHandles as [$ch, $name]) {
+        $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        curl_multi_remove_handle($mh, $ch);
 
         if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
             $ids[] = $data[0]['id'];
@@ -123,11 +160,16 @@ function getCategoryIds($domain, $username, $password, $categories) {
             if ($created) $ids[] = $created;
         }
     }
+
+    curl_multi_close($mh);
     return $ids;
 }
 
 function getTagIds($domain, $username, $password, $tags) {
     $ids = [];
+    $mh = curl_multi_init();
+    $curlHandles = [];
+
     foreach ($tags as $name) {
         $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
         $ch = curl_init($url);
@@ -135,9 +177,20 @@ function getTagIds($domain, $username, $password, $tags) {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
         ]);
-        $response = curl_exec($ch);
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[] = [$ch, $name];
+    }
+
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
+
+    foreach ($curlHandles as [$ch, $name]) {
+        $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        curl_multi_remove_handle($mh, $ch);
 
         if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
             $ids[] = $data[0]['id'];
@@ -146,6 +199,8 @@ function getTagIds($domain, $username, $password, $tags) {
             if ($created) $ids[] = $created;
         }
     }
+
+    curl_multi_close($mh);
     return $ids;
 }
 
