@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $domainParts = explode(':', trim($domainData));
                     if (count($domainParts) === 3) {
                         list($domain, $username, $password) = $domainParts;
-                        $imageIds[$domain] = uploadFeaturedImage($featuredImage, $domain, $username, $password);
+                        $imageIds[$domain] = uploadFeaturedImage($featuredImage, $domain, $username, $password, $postTitle, $postexcerpt, $keywords);
                         if ($imageIds[$domain] === null) {
                             $output .= '<span class="error">Error: Gagal mengupload featured image ke domain ' . $domain . '.</span>' . "\n";
                             $uploadError = true;
@@ -90,13 +90,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 
-function uploadFeaturedImage($file, $domain, $username, $password)
+function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $postexcerpt, $keywords)
 {
     $url = "https://$domain/wp-json/wp/v2/media";
 
     $fileName = basename($file['name']);
     $fileType = $file['type'];
     $filePath = $file['tmp_name'];
+    if (!empty($keywords)) {
+        $randomKeyword = $keywords[array_rand($keywords)];
+        $title = str_replace('@Keyword', $randomKeyword, $postTitle);
+    } else {
+        $title = $postTitle;
+    }
+
+    $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $title], $postexcerpt);
+
+    $postFields = [
+        'file' => new CURLFile($filePath, $fileType, $fileName),
+        'title' => $title,
+        'alt_text' => $title,
+        'caption' => $excerpt,
+    ];
 
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -105,9 +120,8 @@ function uploadFeaturedImage($file, $domain, $username, $password)
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => [
             'Authorization: Basic ' . base64_encode("$username:$password"),
-            'Content-Disposition: attachment; filename="' . $fileName . '"',
         ],
-        CURLOPT_POSTFIELDS => file_get_contents($filePath),
+        CURLOPT_POSTFIELDS => $postFields,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => false,
     ]);
@@ -125,6 +139,7 @@ function uploadFeaturedImage($file, $domain, $username, $password)
         return null;
     }
 }
+
 
 function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt, $categories, $tags, $keywords, $featuredImageIds)
 {
