@@ -5,7 +5,6 @@ ob_implicit_flush(true);
 ob_end_flush();
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Ambil data dari form
     $postTitle = $_POST['postTitle'] ?? '';
     $postContent = $_POST['postContent'] ?? '';
     $postexcerpt = $_POST['excerpt'] ?? '';
