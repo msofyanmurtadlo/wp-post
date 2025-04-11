@@ -292,7 +292,7 @@ function wpPost($url, $username, $password, $data) {
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Daftar Keyword</label>
-                            <textarea name="keywords" class="form-control" rows="8" placeholder="Masukkan keywords (1 per baris)"><?= htmlspecialchars($_POST['keywords'] ?? '') ?></textarea>
+                            <textarea name="keywords" class="form-control" rows="5" placeholder="Masukkan keywords (1 per baris)"><?= htmlspecialchars($_POST['keywords'] ?? '') ?></textarea>
                             <small class="text-muted">Pisahkan setiap <code>keyword</code> dengan enter.</small>
                         </div>
                     </div>
