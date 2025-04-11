@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $domainParts = explode(':', trim($domainData));
                     if (count($domainParts) === 3) {
                         list($domain, $username, $password) = $domainParts;
-                        $imageIds[$domain] = uploadFeaturedImage($featuredImage, $domain, $username, $password, $postTitle, $postexcerpt, $keywords);
+                        $imageIds[$domain] = uploadFeaturedImage($featuredImage, $domain, $username, $password, $postTitle, $keywords);
                         if ($imageIds[$domain] === null) {
                             $output .= '<span class="error">Error: Gagal mengupload featured image ke domain ' . $domain . '.</span>' . "\n";
                             $uploadError = true;
@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 
-function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $postexcerpt, $keywords)
+function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $keywords)
 {
     $url = "https://$domain/wp-json/wp/v2/media";
 
@@ -104,13 +104,10 @@ function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $
         $title = $postTitle;
     }
 
-    $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $title], $postexcerpt);
-
     $postFields = [
         'file' => new CURLFile($filePath, $fileType, $fileName),
         'title' => $title,
         'alt_text' => $title,
-        'caption' => $excerpt,
     ];
 
     $ch = curl_init();
