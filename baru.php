@@ -306,7 +306,7 @@ function wpPost($url, $username, $password, $data) {
                             <div class="col-md-6">
                                 <label class="form-label">Deskripsi</label>
                                 <input name="excerpt" class="form-control mb-3" placeholder="Deskripsi" value="<?= htmlspecialchars($_POST['excerpt'] ?? '') ?>">
-                                <small class="text-muted">Gunakan <code>@Judul</code> untuk replace otomatis.</small>
+                                <small class="text-muted">Gunakan <code>@Domain</code> dan <code>@Judul</code> untuk replace otomatis.</small>
                             </div>
                         </div>
                         <label class="form-label">Konten Post</label>
