@@ -91,7 +91,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-
 function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $keywords)
 {
     $url = "https://$domain/wp-json/wp/v2/media";
@@ -141,7 +140,6 @@ function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $
         return null;
     }
 }
-
 
 function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt, $categories, $tags, $keywords, $featuredImageIds)
 {
@@ -235,6 +233,7 @@ function getCategoryIds($domain, $username, $password, $categories)
     $ids = [];
     $mh = curl_multi_init();
     $curlHandles = [];
+    $nameMap = [];
 
     foreach ($categories as $name) {
         $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
@@ -244,7 +243,8 @@ function getCategoryIds($domain, $username, $password, $categories)
             CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
         ]);
         curl_multi_add_handle($mh, $ch);
-        $curlHandles[] = [$ch, $name];
+        $curlHandles[] = $ch;
+        $nameMap[(int)$ch] = $name;
     }
 
     $running = null;
@@ -253,9 +253,10 @@ function getCategoryIds($domain, $username, $password, $categories)
         curl_multi_select($mh);
     } while ($running > 0);
 
-    foreach ($curlHandles as [$ch, $name]) {
+    foreach ($curlHandles as $ch) {
         $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $name = $nameMap[(int)$ch] ?? '';
         curl_multi_remove_handle($mh, $ch);
 
         if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
@@ -275,6 +276,7 @@ function getTagIds($domain, $username, $password, $tags)
     $ids = [];
     $mh = curl_multi_init();
     $curlHandles = [];
+    $nameMap = [];
 
     foreach ($tags as $name) {
         $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
@@ -284,7 +286,8 @@ function getTagIds($domain, $username, $password, $tags)
             CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
         ]);
         curl_multi_add_handle($mh, $ch);
-        $curlHandles[] = [$ch, $name];
+        $curlHandles[] = $ch;
+        $nameMap[(int)$ch] = $name;
     }
 
     $running = null;
@@ -293,9 +296,10 @@ function getTagIds($domain, $username, $password, $tags)
         curl_multi_select($mh);
     } while ($running > 0);
 
-    foreach ($curlHandles as [$ch, $name]) {
+    foreach ($curlHandles as $ch) {
         $response = curl_multi_getcontent($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $name = $nameMap[(int)$ch] ?? '';
         curl_multi_remove_handle($mh, $ch);
 
         if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
@@ -335,9 +339,18 @@ function wpPost($url, $username, $password, $data)
         ],
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($data),
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 10,
     ]);
     $res = curl_exec($ch);
+    $error = curl_error($ch);
     curl_close($ch);
+
+    if ($res === false) {
+        error_log("cURL error on wpPost: $error");
+        return null;
+    }
+
     return json_decode($res, true);
 }
 ?>
