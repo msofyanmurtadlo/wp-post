@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $featuredImage = $_FILES['featured_image'] ?? null;
 
     $output = '';
+
     $uploadError = false;
 
     if (empty($domainInput)) {
@@ -68,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif (empty($tags)) {
             $output .= '<span class="error">Error: Tag tidak boleh kosong.</span>' . "\n";
         } elseif (!$uploadError) {
-            $chunkSize = 5; // Reduced chunk size for better handling
+            $chunkSize = 10;
             $domainChunks = array_chunk($domains, $chunkSize);
 
             foreach ($domainChunks as $chunk) {
@@ -82,7 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         flush();
                     }
                 }
-                sleep(1); // Add small delay between chunks
             }
         }
     }
@@ -94,10 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $keywords)
 {
     $url = "https://$domain/wp-json/wp/v2/media";
+
     $fileName = basename($file['name']);
     $fileType = $file['type'];
     $filePath = $file['tmp_name'];
-
     if (!empty($keywords)) {
         $randomKeyword = $keywords[array_rand($keywords)];
         $title = str_replace('@Keyword', $randomKeyword, $postTitle);
@@ -122,7 +122,6 @@ function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $
         CURLOPT_POSTFIELDS => $postFields,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => false,
-        CURLOPT_TIMEOUT => 30,
     ]);
 
     $response = curl_exec($ch);
@@ -145,6 +144,9 @@ function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $
 function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt, $categories, $tags, $keywords, $featuredImageIds)
 {
     $domainResults = [];
+    $mh = curl_multi_init();
+    $curlHandles = [];
+    $domainNames = [];
 
     foreach ($domains as $domainData) {
         $parts = explode(':', $domainData);
@@ -153,126 +155,163 @@ function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt,
             continue;
         }
 
-        list($domain, $username, $password) = $parts;
+        [$domain, $username, $password] = $parts;
+        $domainNames[] = $domain;
+        $catIds = getCategoryIds($domain, $username, $password, $categories);
+        $tagIds = getTagIds($domain, $username, $password, $tags);
 
-        try {
-            // Get or create categories with retry mechanism
-            $catIds = [];
-            foreach ($categories as $category) {
-                $catId = getOrCreateCategory($domain, $username, $password, $category);
-                if ($catId) {
-                    $catIds[] = $catId;
-                }
-            }
+        if (!empty($keywords)) {
+            $randomKeyword = $keywords[array_rand($keywords)];
+            $title = str_replace('@Keyword', $randomKeyword, $postTitle);
+        } else {
+            $title = $postTitle;
+        }
 
-            if (empty($catIds)) {
-                $domainResults[$domain] = "Gagal membuat/mendapatkan kategori";
-                continue;
-            }
+        $content = str_replace(['@Domain', '@Judul'], [$domain, $title], $postContent);
+        if (isset($featuredImageIds[$domain]['url'])) {
+            $imageTag = '<figure class="wp-block-image aligncenter"><img src="' . htmlspecialchars($featuredImageIds[$domain]['url']) . '" alt="' . htmlspecialchars($title) . '" style="max-width:100%;height:auto;" /></figure>';
+            $content = str_replace('@Gambar', $imageTag, $content);
+        }
 
-            // Get or create tags with retry mechanism
-            $tagIds = [];
-            foreach ($tags as $tag) {
-                $tagId = getOrCreateTag($domain, $username, $password, $tag);
-                if ($tagId) {
-                    $tagIds[] = $tagId;
-                }
-            }
+        $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $title], $postexcerpt);
 
-            if (!empty($keywords)) {
-                $randomKeyword = $keywords[array_rand($keywords)];
-                $title = str_replace('@Keyword', $randomKeyword, $postTitle);
-            } else {
-                $title = $postTitle;
-            }
+        $postData = [
+            'title' => $title,
+            'content' => $content,
+            'excerpt' => $excerpt,
+            'status' => 'draft',
+            'categories' => $catIds,
+            'tags' => $tagIds,
+        ];
 
-            $content = str_replace(['@Domain', '@Judul'], [$domain, $title], $postContent);
-            if (isset($featuredImageIds[$domain]['url'])) {
-                $imageTag = '<figure class="wp-block-image aligncenter"><img src="' . htmlspecialchars($featuredImageIds[$domain]['url']) . '" alt="' . htmlspecialchars($title) . '" style="max-width:100%;height:auto;" /></figure>';
-                $content = str_replace('@Gambar', $imageTag, $content);
-            }
+        if (isset($featuredImageIds[$domain]['id'])) {
+            $postData['featured_media'] = $featuredImageIds[$domain]['id'];
+        }
 
-            $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $title], $postexcerpt);
+        $ch = curl_init("https://$domain/wp-json/wp/v2/posts");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Basic ' . base64_encode("$username:$password"),
+                'Content-Type: application/json'
+            ],
+            CURLOPT_POSTFIELDS => json_encode($postData),
+            CURLOPT_TIMEOUT => 120,
+            CURLOPT_CONNECTTIMEOUT => 120,
+        ]);
 
-            $postData = [
-                'title' => $title,
-                'content' => $content,
-                'excerpt' => $excerpt,
-                'status' => 'draft',
-                'categories' => $catIds,
-                'tags' => $tagIds,
-            ];
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[] = $ch;
+    }
 
-            if (isset($featuredImageIds[$domain]['id'])) {
-                $postData['featured_media'] = $featuredImageIds[$domain]['id'];
-            }
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
 
-            $response = wpPost("https://$domain/wp-json/wp/v2/posts", $username, $password, $postData);
+    foreach ($curlHandles as $index => $ch) {
+        $response = curl_multi_getcontent($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $domain = $domainNames[$index];
+        curl_multi_remove_handle($mh, $ch);
 
-            if ($response && isset($response['id'])) {
-                $domainResults[$domain] = true;
-            } else {
-                $error = isset($response['message']) ? $response['message'] : 'Unknown error';
-                $domainResults[$domain] = "Gagal membuat post: " . $error;
-            }
-        } catch (Exception $e) {
-            $domainResults[$domain] = "Exception: " . $e->getMessage();
+        if ($httpCode == 201) {
+            $domainResults[$domain] = true;
+        } else {
+            $domainResults[$domain] = "HTTP $httpCode: " . ($response ? json_decode($response)->message : 'Tidak ada pesan');
         }
     }
 
+    curl_multi_close($mh);
     return $domainResults;
 }
 
-function getOrCreateCategory($domain, $username, $password, $name, $retry = 3)
+function getCategoryIds($domain, $username, $password, $categories)
 {
-    $existing = findExistingTerm($domain, $username, $password, 'categories', $name);
-    if ($existing) {
-        return $existing;
+    $ids = [];
+    $mh = curl_multi_init();
+    $curlHandles = [];
+    $nameMap = [];
+
+    foreach ($categories as $name) {
+        $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
+        ]);
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[] = $ch;
+        $nameMap[(int)$ch] = $name;
     }
 
-    for ($i = 0; $i < $retry; $i++) {
-        $created = createCategory($domain, $username, $password, $name);
-        if ($created) {
-            return $created;
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
+
+    foreach ($curlHandles as $ch) {
+        $response = curl_multi_getcontent($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $name = $nameMap[(int)$ch] ?? '';
+        curl_multi_remove_handle($mh, $ch);
+
+        if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
+            $ids[] = $data[0]['id'];
+        } else {
+            $created = createCategory($domain, $username, $password, $name);
+            if ($created) $ids[] = $created;
         }
-        sleep(1); // Wait before retry
     }
 
-    return null;
+    curl_multi_close($mh);
+    return $ids;
 }
 
-function getOrCreateTag($domain, $username, $password, $name, $retry = 3)
+function getTagIds($domain, $username, $password, $tags)
 {
-    $existing = findExistingTerm($domain, $username, $password, 'tags', $name);
-    if ($existing) {
-        return $existing;
+    $ids = [];
+    $mh = curl_multi_init();
+    $curlHandles = [];
+    $nameMap = [];
+
+    foreach ($tags as $name) {
+        $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
+        ]);
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[] = $ch;
+        $nameMap[(int)$ch] = $name;
     }
 
-    for ($i = 0; $i < $retry; $i++) {
-        $created = createTag($domain, $username, $password, $name);
-        if ($created) {
-            return $created;
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
+
+    foreach ($curlHandles as $ch) {
+        $response = curl_multi_getcontent($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $name = $nameMap[(int)$ch] ?? '';
+        curl_multi_remove_handle($mh, $ch);
+
+        if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
+            $ids[] = $data[0]['id'];
+        } else {
+            $created = createTag($domain, $username, $password, $name);
+            if ($created) $ids[] = $created;
         }
-        sleep(1); // Wait before retry
     }
 
-    return null;
-}
-
-function findExistingTerm($domain, $username, $password, $type, $name)
-{
-    $url = "https://$domain/wp-json/wp/v2/$type?search=" . urlencode($name);
-    $response = wpGet($url, $username, $password);
-
-    if ($response && is_array($response) && !empty($response)) {
-        foreach ($response as $term) {
-            if (strtolower($term['name']) === strtolower($name)) {
-                return $term['id'];
-            }
-        }
-    }
-
-    return null;
+    curl_multi_close($mh);
+    return $ids;
 }
 
 function createCategory($domain, $username, $password, $name)
@@ -289,31 +328,6 @@ function createTag($domain, $username, $password, $name)
     return $response['id'] ?? null;
 }
 
-function wpGet($url, $username, $password)
-{
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Basic ' . base64_encode("$username:$password"),
-        ],
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-    ]);
-
-    $response = curl_exec($ch);
-    $error = curl_error($ch);
-    curl_close($ch);
-
-    if ($response === false) {
-        error_log("cURL error on wpGet: $error");
-        return null;
-    }
-
-    return json_decode($response, true);
-}
-
 function wpPost($url, $username, $password, $data)
 {
     $ch = curl_init($url);
@@ -325,23 +339,22 @@ function wpPost($url, $username, $password, $data)
         ],
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($data),
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 10,
     ]);
-
-    $response = curl_exec($ch);
+    $res = curl_exec($ch);
     $error = curl_error($ch);
     curl_close($ch);
 
-    if ($response === false) {
+    if ($res === false) {
         error_log("cURL error on wpPost: $error");
-        return ['message' => $error];
+        return null;
     }
 
-    return json_decode($response, true);
+    return json_decode($res, true);
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="id">
