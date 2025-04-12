@@ -230,89 +230,84 @@ function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt,
 
 function getCategoryIds($domain, $username, $password, $categories)
 {
+    $existing = getTerms($domain, $username, $password, 'categories');
     $ids = [];
-    $mh = curl_multi_init();
-    $curlHandles = [];
-    $nameMap = [];
 
     foreach ($categories as $name) {
-        $url = "https://$domain/wp-json/wp/v2/categories?search=" . urlencode($name);
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
-        ]);
-        curl_multi_add_handle($mh, $ch);
-        $curlHandles[] = $ch;
-        $nameMap[(int)$ch] = $name;
-    }
+        $found = false;
+        foreach ($existing as $term) {
+            if (strcasecmp($term['name'], $name) === 0) {
+                $ids[] = $term['id'];
+                $found = true;
+                break;
+            }
+        }
 
-    $running = null;
-    do {
-        curl_multi_exec($mh, $running);
-        curl_multi_select($mh);
-    } while ($running > 0);
-
-    foreach ($curlHandles as $ch) {
-        $response = curl_multi_getcontent($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $name = $nameMap[(int)$ch] ?? '';
-        curl_multi_remove_handle($mh, $ch);
-
-        if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
-            $ids[] = $data[0]['id'];
-        } else {
+        if (!$found) {
             $created = createCategory($domain, $username, $password, $name);
             if ($created) $ids[] = $created;
+            usleep(200000); // delay 200ms untuk hindari spam API
         }
     }
 
-    curl_multi_close($mh);
     return $ids;
 }
 
 function getTagIds($domain, $username, $password, $tags)
 {
+    $existing = getTerms($domain, $username, $password, 'tags');
     $ids = [];
-    $mh = curl_multi_init();
-    $curlHandles = [];
-    $nameMap = [];
 
     foreach ($tags as $name) {
-        $url = "https://$domain/wp-json/wp/v2/tags?search=" . urlencode($name);
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")]
-        ]);
-        curl_multi_add_handle($mh, $ch);
-        $curlHandles[] = $ch;
-        $nameMap[(int)$ch] = $name;
-    }
+        $found = false;
+        foreach ($existing as $term) {
+            if (strcasecmp($term['name'], $name) === 0) {
+                $ids[] = $term['id'];
+                $found = true;
+                break;
+            }
+        }
 
-    $running = null;
-    do {
-        curl_multi_exec($mh, $running);
-        curl_multi_select($mh);
-    } while ($running > 0);
-
-    foreach ($curlHandles as $ch) {
-        $response = curl_multi_getcontent($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $name = $nameMap[(int)$ch] ?? '';
-        curl_multi_remove_handle($mh, $ch);
-
-        if ($code == 200 && ($data = json_decode($response, true)) && !empty($data[0]['id'])) {
-            $ids[] = $data[0]['id'];
-        } else {
+        if (!$found) {
             $created = createTag($domain, $username, $password, $name);
             if ($created) $ids[] = $created;
+            usleep(200000); // delay 200ms
         }
     }
 
-    curl_multi_close($mh);
     return $ids;
 }
+
+function getTerms($domain, $username, $password, $type = 'categories')
+{
+    $all = [];
+    $page = 1;
+    do {
+        $url = "https://$domain/wp-json/wp/v2/$type?per_page=100&page=$page";
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . base64_encode("$username:$password")],
+            CURLOPT_TIMEOUT => 15
+        ]);
+        $res = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($http == 200 && $res) {
+            $data = json_decode($res, true);
+            $all = array_merge($all, $data);
+            if (count($data) < 100) break;
+            $page++;
+        } else {
+            break;
+        }
+    } while (true);
+
+    return $all;
+}
+
+
 
 function createCategory($domain, $username, $password, $name)
 {
