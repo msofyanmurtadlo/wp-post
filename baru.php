@@ -50,10 +50,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $domainParts = explode(':', trim($domainData));
                     if (count($domainParts) === 3) {
                         list($domain, $username, $password) = $domainParts;
-                        $imageIds[$domain] = uploadFeaturedImage($featuredImage, $domain, $username, $password, $postTitle, $keywords);
-                        if ($imageIds[$domain] === null) {
+                        $imageInfo = uploadFeaturedImage($featuredImage, $domain, $username, $password, $postTitle, $keywords);
+                        if ($imageInfo === null) {
                             $output .= '<span class="error">Error: Gagal mengupload featured image ke domain ' . $domain . '.</span>' . "\n";
                             $uploadError = true;
+                        } else {
+                            $imageIds[$domain] = $imageInfo;
                         }
                     }
                 }
@@ -130,7 +132,10 @@ function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $
 
     if ($httpCode == 201) {
         $responseData = json_decode($response, true);
-        return $responseData['id'];
+        return [
+            'id' => $responseData['id'],
+            'url' => $responseData['source_url']
+        ];
     } else {
         error_log("Gagal mengupload gambar ke $domain. Kode HTTP: $httpCode, Error: $error, Response: $response");
         return null;
@@ -165,6 +170,11 @@ function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt,
         }
 
         $content = str_replace(['@Domain', '@Judul'], [$domain, $title], $postContent);
+        if (isset($featuredImageIds[$domain]['url'])) {
+            $imageTag = '<figure class="wp-block-image aligncenter"><img src="' . htmlspecialchars($featuredImageIds[$domain]['url']) . '" alt="' . htmlspecialchars($title) . '" style="max-width:100%;height:auto;" /></figure>';
+            $content = str_replace('@Image', $imageTag, $content);
+        }
+
         $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $title], $postexcerpt);
 
         $postData = [
@@ -176,8 +186,8 @@ function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt,
             'tags' => $tagIds,
         ];
 
-        if (isset($featuredImageIds[$domain])) {
-            $postData['featured_media'] = $featuredImageIds[$domain];
+        if (isset($featuredImageIds[$domain]['id'])) {
+            $postData['featured_media'] = $featuredImageIds[$domain]['id'];
         }
 
         $ch = curl_init("https://$domain/wp-json/wp/v2/posts");
@@ -445,7 +455,7 @@ function wpPost($url, $username, $password, $data)
                                 <div class="col-md-6">
                                     <label class="form-label">Deskripsi</label>
                                     <input name="excerpt" class="form-control mb-3" placeholder="Deskripsi" value="<?= htmlspecialchars($_POST['excerpt'] ?? '') ?>">
-                                    <small class="text-muted">Gunakan <code>@Domain</code> dan <code>@Judul</code> untuk replace otomatis.</small>
+                                    <small class="text-muted">Gunakan <code>@Domain</code> , <code>@Judul</code> dan <code>@Image</code> untuk replace otomatis.</small>
                                 </div>
                             </div>
                             <label class="form-label">Konten Post</label>
