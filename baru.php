@@ -172,7 +172,7 @@ function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt,
         $content = str_replace(['@Domain', '@Judul'], [$domain, $title], $postContent);
         if (isset($featuredImageIds[$domain]['url'])) {
             $imageTag = '<figure class="wp-block-image aligncenter"><img src="' . htmlspecialchars($featuredImageIds[$domain]['url']) . '" alt="' . htmlspecialchars($title) . '" style="max-width:100%;height:auto;" /></figure>';
-            $content = str_replace('@Image', $imageTag, $content);
+            $content = str_replace('@Gambar', $imageTag, $content);
         }
 
         $excerpt = str_replace(['@Domain', '@Judul'], [$domain, $title], $postexcerpt);
@@ -460,7 +460,7 @@ function wpPost($url, $username, $password, $data)
                             </div>
                             <label class="form-label">Konten Post</label>
                             <textarea name="postContent" class="form-control mb-2" rows="5" placeholder="Konten..."><?= htmlspecialchars($_POST['postContent'] ?? '') ?></textarea>
-                            <small class="text-muted">Gunakan <code>@Domain</code> , <code>@Judul</code> dan <code>@Image</code> untuk replace otomatis.</small>
+                            <small class="text-muted">Gunakan <code>@Domain</code> , <code>@Judul</code> dan <code>@Gambar</code> untuk replace otomatis.</small>
                             <div class="row mt-3 mb-3">
                                 <div class="col">
                                     <label class="form-label">Kategori</label>
