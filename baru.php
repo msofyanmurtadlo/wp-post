@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tags = $_POST['tags'] ?? '';
     $keywordsInput = $_POST['keywords'] ?? '';
     $featuredImage = $_FILES['featured_image'] ?? null;
+    $status = isset($_POST['postStatus']) && $_POST['postStatus'] == 'on' ? 'publish' : 'draft';
 
     $output = '';
 
@@ -73,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $domainChunks = array_chunk($domains, $chunkSize);
 
             foreach ($domainChunks as $chunk) {
-                $domainResults = createPostsForDomains($chunk, $postTitle, $postContent, $postexcerpt, $categories, $tags, $keywords, $imageIds);
+                $domainResults = createPostsForDomains($chunk, $postTitle, $postContent, $postexcerpt, $categories, $tags, $keywords, $imageIds, $status);
                 foreach ($domainResults as $domain => $result) {
                     if ($result === true) {
                         echo '<span class="success">' . $domain . ' berhasil</span>' . "\n";
@@ -143,7 +144,7 @@ function uploadFeaturedImage($file, $domain, $username, $password, $postTitle, $
 }
 
 
-function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt, $categories, $tags, $keywords, $featuredImageIds)
+function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt, $categories, $tags, $keywords, $featuredImageIds, $status)
 {
     $domainResults = [];
     $mh = curl_multi_init();
@@ -181,7 +182,7 @@ function createPostsForDomains($domains, $postTitle, $postContent, $postexcerpt,
             'title' => $title,
             'content' => $content,
             'excerpt' => $excerpt,
-            'status' => 'draft',
+            'status' =>  $status,
             'categories' => $catIds,
             'tags' => $tagIds,
         ];
@@ -420,6 +421,51 @@ function wpPost($url, $username, $password, $data)
         .info {
             color: blue;
         }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            border-radius: 50%;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+        }
+
+        input:checked+.slider {
+            background-color: #4CAF50;
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(26px);
+        }
     </style>
 </head>
 
@@ -478,6 +524,14 @@ function wpPost($url, $username, $password, $data)
                                 <input type="file" name="featured_image" class="form-control">
                                 <small class="text-muted">Pilih gambar untuk dijadikan Featured Image.</small>
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label">Status Post</label><br>
+                                <label class="switch">
+                                    <input type="checkbox" name="postStatus" id="postStatus">
+                                    <span class="slider"></span>
+                                </label>
+                                <span id="statusLabel">Draft</span>
+                            </div>
 
                             <button type="submit" class="btn btn-primary mt-2 px-4 py-2" id="submitBtn">Jalankan Post</button>
                             <div id="logOutput" class="form-control mt-3" rows="10" readonly>Status postingan!!!</div>
@@ -490,6 +544,13 @@ function wpPost($url, $username, $password, $data)
 
     <script>
         $(document).ready(function() {
+            $('#postStatus').on('change', function() {
+                if (this.checked) {
+                    $('#statusLabel').text('Published');
+                } else {
+                    $('#statusLabel').text('Draft');
+                }
+            });
             $('#postForm').on('submit', function(event) {
                 event.preventDefault();
                 var formData = new FormData(this);
