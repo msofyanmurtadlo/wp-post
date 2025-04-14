@@ -352,81 +352,168 @@ function wpPost($url, $username, $password, $data)
     <title>WP POSTER</title>
     <link rel="icon" href="https://s.w.org/favicon.ico" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --accent-color: #4895ef;
+            --dark-color: #1a1a2e;
+            --light-color: #f8f9fa;
+            --success-color: #4cc9f0;
+            --warning-color: #f72585;
+            --border-radius: 12px;
+            --box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
         body {
-            background-color: #f4f4f9;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7ff;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            color: var(--dark-color);
+            line-height: 1.6;
         }
 
         .main-card {
-            border-radius: 15px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
             background: #ffffff;
+            border: none;
+            overflow: hidden;
         }
 
         .card-header-custom {
-            background: linear-gradient(135deg, #4e73df, #6f42c1);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             color: white;
-            padding: 1.5rem;
-            border-top-left-radius: 15px;
-            border-top-right-radius: 15px;
+            padding: 1.8rem;
+            border-top-left-radius: var(--border-radius);
+            border-top-right-radius: var(--border-radius);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-header-custom::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 70%);
+            transform: rotate(30deg);
+        }
+
+        .card-header-custom h3 {
+            font-weight: 700;
+            position: relative;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-header-custom p {
+            opacity: 0.9;
+            font-weight: 400;
+            position: relative;
         }
 
         .form-label {
             font-weight: 600;
-            color: #333;
+            color: var(--dark-color);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
         }
 
         textarea,
-        input {
-            border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        input,
+        select {
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            transition: var(--transition);
+            padding: 0.75rem 1rem;
+        }
+
+        textarea:focus,
+        input:focus,
+        select:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+            outline: none;
+        }
+
+        .form-control {
+            background-color: #fcfcfc;
+        }
+
+        .form-control::placeholder {
+            color: #aaa;
+            font-weight: 400;
         }
 
         .btn-primary {
-            background-color: #4e73df;
+            background-color: var(--primary-color);
             border: none;
-            transition: all 0.3s ease;
+            transition: var(--transition);
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(67, 97, 238, 0.15);
         }
 
         .btn-primary:hover {
-            background-color: #375ab6;
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(67, 97, 238, 0.2);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
         }
 
         .card-footer {
             background-color: #f8f9fc;
-            border-bottom-left-radius: 15px;
-            border-bottom-right-radius: 15px;
-            padding: 1rem;
+            border-bottom-left-radius: var(--border-radius);
+            border-bottom-right-radius: var(--border-radius);
+            padding: 1.2rem;
             text-align: center;
+            font-size: 0.85rem;
+            color: #666;
         }
 
         #logOutput {
-            background-color: #f1f1f1;
-            color: #000;
-            font-family: monospace;
+            background-color: #f8f9ff;
+            color: var(--dark-color);
+            font-family: 'Fira Code', monospace;
             white-space: pre-wrap;
             word-wrap: break-word;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            padding: 1.2rem;
+            min-height: 150px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            line-height: 1.7;
         }
 
         .error {
-            color: red;
+            color: var(--warning-color);
         }
 
         .success {
-            color: green;
+            color: #2ecc71;
         }
 
         .info {
-            color: blue;
+            color: var(--accent-color);
         }
 
         .switch {
             position: relative;
             display: inline-block;
-            width: 60px;
-            height: 34px;
+            width: 50px;
+            height: 26px;
+            margin-left: 10px;
+            vertical-align: middle;
         }
 
         .switch input {
@@ -443,119 +530,312 @@ function wpPost($url, $username, $password, $data)
             right: 0;
             bottom: 0;
             background-color: #ccc;
-            transition: 0.4s;
+            transition: .4s;
             border-radius: 34px;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 26px;
-            width: 26px;
-            border-radius: 50%;
-            left: 4px;
-            bottom: 4px;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
             background-color: white;
-            transition: 0.4s;
+            transition: .4s;
+            border-radius: 50%;
         }
 
         input:checked+.slider {
-            background-color: #4CAF50;
+            background-color: var(--primary-color);
         }
 
         input:checked+.slider:before {
-            transform: translateX(26px);
+            transform: translateX(24px);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .status-indicator .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-draft .status-dot {
+            background-color: #95a5a6;
+        }
+
+        .status-published .status-dot {
+            background-color: #2ecc71;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title i {
+            margin-right: 8px;
+            color: var(--primary-color);
+        }
+
+        .form-section {
+            background-color: #f8f9ff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e0e0e0;
+        }
+
+        .form-section:hover {
+            border-color: var(--accent-color);
+        }
+
+        .badge-info {
+            background-color: var(--accent-color);
+            font-weight: 500;
+            font-size: 0.75rem;
+            padding: 0.35rem 0.6rem;
+        }
+
+        .tab-content {
+            padding: 1.5rem 0;
+        }
+
+        .nav-tabs .nav-link {
+            border: none;
+            color: #666;
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: var(--primary-color);
+            background-color: transparent;
+            border-bottom: 3px solid var(--primary-color);
+        }
+
+        .nav-tabs {
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            background-color: var(--primary-color);
+            transition: width 0.6s ease;
+        }
+
+        @media (max-width: 768px) {
+            .card-header-custom {
+                padding: 1.2rem;
+            }
+
+            .form-section {
+                padding: 1rem;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="container my-5">
+    <div class="container py-4">
         <div class="main-card">
             <div class="card-header-custom">
-                <h3>🚀 Auto Post to WordPress</h3>
-                <p class="mb-0 text-light small">Posting cepat ke banyak domain WordPress hanya dengan sekali klik.</p>
+                <h3><i class="fas fa-rocket me-2"></i>Auto Post to WordPress</h3>
+                <p class="mb-0">Posting cepat ke banyak domain WordPress hanya dengan sekali klik.</p>
             </div>
             <div class="p-4">
                 <form id="postForm" method="POST" enctype="multipart/form-data">
-                    <div class="row">
-                        <div class="col-md-4 ">
-                            <div class="mb-3">
-                                <label class="form-label">Daftar Website</label>
-                                <textarea name="domain" class="form-control" rows="8" placeholder="domain.com:username:password"><?= htmlspecialchars($_POST['domain'] ?? '') ?></textarea>
-                                <small class="text-muted">Pisahkan per baris: <code>domain.com:username:password</code></small>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Daftar Keyword</label>
-                                <textarea name="keywords" class="form-control" rows="5" placeholder="Masukkan keywords (1 per baris)"><?= htmlspecialchars($_POST['keywords'] ?? '') ?></textarea>
-                                <small class="text-muted">Pisahkan setiap <code>keyword</code> dengan enter.</small>
+                    <ul class="nav nav-tabs" id="myTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="websites-tab" data-bs-toggle="tab" data-bs-target="#websites" type="button" role="tab">Websites</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="content-tab" data-bs-toggle="tab" data-bs-target="#content" type="button" role="tab">Konten</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">Pengaturan</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="myTabContent">
+                        <div class="tab-pane fade show active" id="websites" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-section">
+                                        <div class="section-title">
+                                            <i class="fas fa-globe"></i>
+                                            <span>Daftar Website</span>
+                                            <span class="badge badge-info ms-2">Wajib</span>
+                                        </div>
+                                        <textarea name="domain" class="form-control" rows="8" placeholder="domain.com:username:password"><?= htmlspecialchars($_POST['domain'] ?? '') ?></textarea>
+                                        <small class="text-muted mt-2 d-block">Pisahkan per baris: <code>domain.com:username:password</code></small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-section">
+                                        <div class="section-title">
+                                            <i class="fas fa-key"></i>
+                                            <span>Keywords</span>
+                                        </div>
+                                        <textarea name="keywords" class="form-control" rows="8" placeholder="Masukkan keywords (1 per baris)"><?= htmlspecialchars($_POST['keywords'] ?? '') ?></textarea>
+                                        <small class="text-muted mt-2 d-block">Pisahkan setiap <code>keyword</code> dengan enter.</small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-8">
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">Judul Post</label>
-                                    <input name="postTitle" class="form-control mb-3" placeholder="Judul" value="<?= htmlspecialchars($_POST['postTitle'] ?? '') ?>">
-                                    <small class="text-muted">Gunakan <code>@Keyword</code> untuk replace otomatis.</small>
+
+                        <div class="tab-pane fade" id="content" role="tabpanel">
+                            <div class="form-section">
+                                <div class="section-title">
+                                    <i class="fas fa-align-left"></i>
+                                    <span>Konten Post</span>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Deskripsi</label>
-                                    <input name="excerpt" class="form-control mb-3" placeholder="Deskripsi" value="<?= htmlspecialchars($_POST['excerpt'] ?? '') ?>">
-                                    <small class="text-muted">Gunakan <code>@Domain</code> dan <code>@Judul</code> untuk replace otomatis.</small>
-                                </div>
-                            </div>
-                            <label class="form-label">Konten Post</label>
-                            <textarea name="postContent" class="form-control mb-2" rows="5" placeholder="Konten..."><?= htmlspecialchars($_POST['postContent'] ?? '') ?></textarea>
-                            <small class="text-muted">Gunakan <code>@Domain</code> , <code>@Judul</code> dan <code>@Gambar</code> untuk replace otomatis.</small>
-                            <div class="row mt-3 mb-3">
-                                <div class="col">
-                                    <label class="form-label">Kategori</label>
-                                    <textarea name="categories" class="form-control" rows="3" placeholder="Misal: News, Tutorial"><?= htmlspecialchars($_POST['categories'] ?? '') ?></textarea>
-                                    <small class="text-muted">Pisahkan setiap kategori dengan koma.</small>
-                                </div>
-                                <div class="col">
-                                    <label class="form-label">Tags</label>
-                                    <textarea name="tags" class="form-control" rows="3" placeholder="Misal: WordPress, Otomatis"><?= htmlspecialchars($_POST['tags'] ?? '') ?></textarea>
-                                    <small class="text-muted">Pisahkan setiap Tag dengan koma.</small>
-                                </div>
-                            </div>
-                            <div class="col-md-12 mb-3">
-                                <label class="form-label">Gambar Featured</label>
-                                <input type="file" name="featured_image" class="form-control">
-                                <small class="text-muted">Pilih gambar untuk dijadikan Featured Image.</small>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Status Post</label><br>
-                                <label class="switch">
-                                    <input type="checkbox" name="postStatus" id="postStatus">
-                                    <span class="slider"></span>
-                                </label>
-                                <span id="statusLabel">Draft</span>
+                                <textarea name="postContent" class="form-control" rows="5" placeholder="Konten..."><?= htmlspecialchars($_POST['postContent'] ?? '') ?></textarea>
+                                <small class="text-muted mt-2 d-block">Gunakan <code>@Domain</code> , <code>@Judul</code> dan <code>@Gambar</code> untuk replace otomatis.</small>
                             </div>
 
-                            <button type="submit" class="btn btn-primary mt-2 px-4 py-2" id="submitBtn">Jalankan Post</button>
-                            <div id="logOutput" class="form-control mt-3" rows="10" readonly>Status postingan!!!</div>
+                            <div class="form-section">
+                                <div class="section-title">
+                                    <i class="fas fa-tags"></i>
+                                    <span>Kategori & Tags</span>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Kategori</label>
+                                        <textarea name="categories" class="form-control" rows="3" placeholder="Misal: News, Tutorial"><?= htmlspecialchars($_POST['categories'] ?? '') ?></textarea>
+                                        <small class="text-muted mt-2 d-block">Pisahkan setiap kategori dengan koma.</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Tags</label>
+                                        <textarea name="tags" class="form-control" rows="3" placeholder="Misal: WordPress, Otomatis"><?= htmlspecialchars($_POST['tags'] ?? '') ?></textarea>
+                                        <small class="text-muted mt-2 d-block">Pisahkan setiap Tag dengan koma.</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-section">
+                                <div class="section-title">
+                                    <i class="fas fa-toggle-on"></i>
+                                    <span>Status Post</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <label class="form-label mb-0">Status:</label>
+                                    <label class="switch ms-3">
+                                        <input type="checkbox" name="postStatus" id="postStatus">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span id="statusLabel" class="status-indicator status-draft ms-2">
+                                        <span class="status-dot"></span>
+                                        <span>Draft</span>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
+
+                        <div class="tab-pane fade" id="settings" role="tabpanel">
+                            <div class="form-section">
+                                <div class="section-title">
+                                    <i class="fas fa-heading"></i>
+                                    <span>Judul Post & Deskripsi Singkat</span>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Judul Post</label>
+                                        <input name="postTitle" class="form-control" placeholder="Judul" value="<?= htmlspecialchars($_POST['postTitle'] ?? '') ?>">
+                                        <small class="text-muted mt-2 d-block">Gunakan <code>@Keyword</code> untuk replace otomatis.</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Deskripsi Singkat</label>
+                                        <input name="excerpt" class="form-control" placeholder="Deskripsi" value="<?= htmlspecialchars($_POST['excerpt'] ?? '') ?>">
+                                        <small class="text-muted mt-2 d-block">Gunakan <code>@Domain</code> dan <code>@Judul</code> untuk replace otomatis.</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-section">
+                                <div class="section-title">
+                                    <i class="fas fa-image"></i>
+                                    <span>Gambar Featured</span>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Upload Gambar</label>
+                                    <input type="file" name="featured_image" class="form-control">
+                                    <small class="text-muted mt-2 d-block">Pilih gambar untuk dijadikan Featured Image.</small>
+                                </div>
+                            </div>
+
+
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-terminal"></i>
+                            <span>Hasil Log</span>
+                        </div>
+                        <div id="logOutput" class="form-control">Siap ngepost...</div>
+                        <div class="progress mt-2 d-none" id="progressBar">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <div class="text-muted small">
+                            <i class="fas fa-info-circle me-1"></i> WP POSTER
+                        </div>
+                        <button type="submit" class="btn btn-primary px-4" id="submitBtn">
+                            <i class="fas fa-paper-plane me-2"></i>Jalankan Post
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         $(document).ready(function() {
             $('#postStatus').on('change', function() {
                 if (this.checked) {
-                    $('#statusLabel').text('Published');
+                    $('#statusLabel').removeClass('status-draft').addClass('status-published').find('span:last').text('Published');
                 } else {
-                    $('#statusLabel').text('Draft');
+                    $('#statusLabel').removeClass('status-published').addClass('status-draft').find('span:last').text('Draft');
                 }
             });
+
             $('#postForm').on('submit', function(event) {
                 event.preventDefault();
                 var formData = new FormData(this);
-                $('#logOutput').text('Sedang Memproses...');
-                $('#submitBtn').text('Memproses...').prop('disabled', true);
+                $('#logOutput').html('<span class="info"><i class="fas fa-spinner fa-spin me-2"></i>Memproses postingan...</span>');
+                $('#submitBtn').html('<i class="fas fa-spinner fa-spin me-2"></i>Memproses...').prop('disabled', true);
+                $('#progressBar').removeClass('d-none').find('.progress-bar').css('width', '0%');
+
+                var progress = 0;
+                var progressInterval = setInterval(function() {
+                    progress += 5;
+                    if (progress <= 90) {
+                        $('#progressBar .progress-bar').css('width', progress + '%');
+                    }
+                }, 300);
 
                 $.ajax({
                     url: '',
@@ -564,13 +844,31 @@ function wpPost($url, $username, $password, $data)
                     contentType: false,
                     processData: false,
                     success: function(response) {
+                        clearInterval(progressInterval);
+                        $('#progressBar .progress-bar').css('width', '100%');
                         $('#logOutput').html(response);
-                        $('#submitBtn').text('Jalankan Post').prop('disabled', false);
+                        $('#submitBtn').html('<i class="fas fa-paper-plane me-2"></i>Jalankan Post').prop('disabled', false);
+                        setTimeout(function() {
+                            $('#progressBar').addClass('d-none');
+                        }, 1000);
                     },
                     error: function(xhr, status, error) {
-                        $('#logOutput').html('<span class="error">Terjadi kesalahan: ' + error + '</span>');
-                        $('#submitBtn').text('Jalankan Post').prop('disabled', false);
+                        clearInterval(progressInterval);
+                        $('#progressBar .progress-bar').css('width', '100%');
+                        $('#logOutput').html('<span class="error"><i class="fas fa-exclamation-circle me-2"></i>Error: ' + error + '</span>');
+                        $('#submitBtn').html('<i class="fas fa-paper-plane me-2"></i>Jalankan Post').prop('disabled', false);
+                        setTimeout(function() {
+                            $('#progressBar').addClass('d-none');
+                        }, 1000);
                     }
+                });
+            });
+
+            var tabElms = document.querySelectorAll('button[data-bs-toggle="tab"]');
+            tabElms.forEach(function(tabEl) {
+                tabEl.addEventListener('shown.bs.tab', function(event) {
+                    event.target.classList.add('active');
+                    event.relatedTarget.classList.remove('active');
                 });
             });
         });
