@@ -2006,7 +2006,7 @@ a.tag-cloud-link:hover,
   background: #000;
   height: 35px;
   line-height: 32px;
-  border-bottom: 1px solid #ff0000;
+  border-bottom: 1px solid #898989;
 }
 #breadcrumbs {
   list-style: none;
