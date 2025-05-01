@@ -278,7 +278,7 @@ acronym {
 }
 mark,
 ins {
-  background: #f90;
+  background: #ff0000;
   text-decoration: none;
 }
 big {
@@ -567,7 +567,7 @@ a:focus {
 #site-navigation > ul > li > a {
   display: block;
   padding: 21px 18px;
-  color: #f90;
+  color: #fff;
   font-weight: 700;
   outline: 0;
 }
@@ -898,8 +898,8 @@ a:focus {
 }
 .pagination ul li a.current,
 .pagination ul li a:hover {
-  color: #f90;
-  border-color: #f90;
+  color: #ff0000;
+  border-color: #ff0000;
 }
 .screen-reader-text {
   clip: rect(1px, 1px, 1px, 1px);
@@ -1137,7 +1137,7 @@ a:focus {
 }
 .site-branding .logo a {
   display: inline-block;
-  color: #f90;
+  color: #fff;
   outline: none;
 }
 .site-branding .logo i {
@@ -1208,7 +1208,7 @@ img[data-src].display-img {
   text-align: center;
   height: 3.5em;
   overflow: hidden;
-  color: #f90;
+  color: #fff;
   display: block;
   padding: 0.5em 0 0;
 }
@@ -1348,7 +1348,7 @@ span.hd-video {
   left: 5px;
   width: calc(100% - 10px);
   background: rgba(0, 0, 0, 0.5);
-  color: #f90;
+  color: #ff0000;
 }
 #filters {
   position: absolute;
@@ -1588,7 +1588,7 @@ span.post-like a.disabled:hover {
 }
 .site-footer {
   background: #000;
-  border-top: 1px solid #f90;
+  border-top: 1px solid #ff0000;
   padding: 40px 0;
   margin-top: 1em;
   clear: both;
@@ -1869,9 +1869,9 @@ span.post-like a.disabled:hover {
 .video-tags a.label,
 a.tag-cloud-link,
 .template-actors li a {
-  color: #f90;
+  color: #ff0000;
   background: #000;
-  border: 1px solid #f90;
+  border: 1px solid #ff0000;
   padding: 2px 5px;
   margin: 0 0.5em 0.5em 0;
   font-size: 1em;
@@ -2006,7 +2006,7 @@ a.tag-cloud-link:hover,
   background: #000;
   height: 35px;
   line-height: 32px;
-  border-bottom: 1px solid #f90;
+  border-bottom: 1px solid #ff0000;
 }
 #breadcrumbs {
   list-style: none;
