@@ -6,7 +6,7 @@ ob_end_flush();
 
 function generateContentWithGemini($apiKey, $prompt)
 {
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey;
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $apiKey;
 
     $data = [
         'contents' => [
@@ -47,16 +47,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $contentToSpin = $_POST['content_to_spin'] ?? '';
 
         if (empty($apiKey)) {
-            echo json_encode(['success' => false, 'message' => 'API key is required']);
+            echo json_encode(['success' => false, 'message' => 'API key wajib diisi']);
             exit;
         }
 
         if (empty($contentToSpin)) {
-            echo json_encode(['success' => false, 'message' => 'Content to spin is required']);
+            echo json_encode(['success' => false, 'message' => 'Konten wajib diisi']);
             exit;
         }
 
-        $prompt = "Please rewrite the following content while maintaining its original meaning and improving its quality without changing the original  @domain, @Judul, @Gambar and html structure:\n\n" . $contentToSpin;
+        $prompt = "Please rewrite the following content to improve its readability and quality while strictly preserving:
+            1. All HTML tags (<h1>, <h2>, <p>, etc.) exactly as they appear
+            2. All placeholders (@domain, @Judul, @Gambar) without modification
+            3. The original structure and paragraph order
+            
+            Only modify text between HTML tags by:
+            - Improving grammar and clarity
+            - Enhancing flow while keeping original meaning
+            - Maintaining the same tone
+            - Keeping all key information
+            
+            Do NOT:
+            - Add/remove HTML tags
+            - Change placeholders
+            - Alter document structure
+            - Add new information
+            
+            Content to rewrite:\n\n" . $contentToSpin;
         $generatedContent = generateContentWithGemini($apiKey, $prompt);
 
         if ($generatedContent) {
